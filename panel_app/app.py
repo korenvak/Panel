@@ -391,7 +391,8 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     draw_rtl(c, W - m, y, f"לכבוד: {customer_data['name']}", PDF_FONT, fontsize=12)
     draw_rtl(c, W - m, y - 6 * mm, f"תאריך: {customer_data['date'].strftime('%d/%m/%Y')}", PDF_FONT, fontsize=12)
     draw_rtl(c, W - m, y - 12 * mm, f"טלפון: {customer_data['phone']}", PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 18 * mm, f'דוא"ל: {customer_data["email"]}', PDF_FONT, fontsize=12)
+    # KeyError: 'email' occurred here when customer_data lacked this field
+    draw_rtl(c, W - m, y - 18 * mm, 'דוא"ל: M@panel-k.co.il', PDF_FONT, fontsize=12)
     draw_rtl(c, W - m, y - 24 * mm, f"כתובת: {customer_data['address']}", PDF_FONT, fontsize=12)
     y -= 30 * mm
 
