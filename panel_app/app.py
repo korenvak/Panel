@@ -266,7 +266,8 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     buffer = io.BytesIO()
 
     c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    W, H = A4
+    m = 20 * mm
 
     try:
         font_path = os.path.join(os.path.dirname(__file__), 'Alef-Regular.ttf')
@@ -282,6 +283,12 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     except Exception:
         hebrew_font = 'Helvetica'
 
+    PDF_FONT = hebrew_font
+
+    def draw_rtl(canv, x, y, text, font, fontsize=12):
+        canv.setFont(font, fontsize)
+        canv.drawRightString(x, y, rtl(text))
+
     # עמוד ראשון - הצעת מחיר
     logo_path = None
     for ext in ['png', 'jpg', 'jpeg']:
@@ -294,67 +301,63 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
 
     if logo_path:
         try:
-            logo = ImageReader(logo_path)
-            c.drawImage(logo, width - 150, height - 100, width=100, height=50, preserveAspectRatio=True)
+            img = PILImage.open(logo_path).convert("RGBA")
+            bg = PILImage.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3])
+            temp_logo = os.path.join(tempfile.gettempdir(), "logo_flat.jpg")
+            bg.save(temp_logo)
+            logo_flat = ImageReader(temp_logo)
+            c.drawImage(logo_flat, m, H - m - 40 * mm, 40 * mm, preserveAspectRatio=True)
         except Exception as e:
             print(f"Error loading logo: {e}")
 
-    y = height - 80
-    c.setFont(hebrew_font, 24)
+    y = H - 40 * mm
+    c.setFont(PDF_FONT, 24)
     c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.drawCentredString(width / 2, y, rtl("הצעת מחיר"))
+    c.drawCentredString(W / 2, y, rtl("הצעת מחיר"))
 
-    y -= 60
-    c.setFont(hebrew_font, 12)
-    c.setFillColorRGB(0, 0, 0)
-    details = [
-        (rtl("לכבוד:"), rtl(customer_data.get('name', ''))),
-        (rtl("תאריך:"), customer_data['date'].strftime('%d/%m/%Y')),
-        (rtl("טלפון:"), customer_data.get('phone', '')),
-        (rtl("כתובת:"), rtl(customer_data.get('address', '')))
-    ]
-    for label, value in details:
-        c.drawRightString(width - 50, y, f"{label} {value}")
-        y -= 20
+    y -= 20 * mm
+    draw_rtl(c, W - m, y, f"לכבוד: {customer_data['name']}", PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 6 * mm, f"תאריך: {customer_data['date'].strftime('%d/%m/%Y')}", PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 12 * mm, "טלפון: 072-393-3997", PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 18 * mm, "דוא\"ל: M@panel-k.co.il", PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 24 * mm, "כתובת: באר שבע (מתחם הורדוס)", PDF_FONT, fontsize=12)
+    y -= 30 * mm
 
-    y -= 30
-    c.setFont(hebrew_font, 11)
+    c.setFont(PDF_FONT, 11)
     c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.rect(50, y - 15, width - 100, 25, fill=1)
+    c.rect(m, y - 6 * mm, W - 2 * m, 6 * mm, fill=1)
     c.setFillColorRGB(1, 1, 1)
     headers = [
-        (rtl("מוצר"), 450),
-        (rtl("כמות"), 250),
-        (rtl("מחיר ליחידה"), 150),
-        (rtl('סה"כ'), 70)
+        ("מוצר", W - m),
+        ("כמות", W - m - 40 * mm),
+        ("מחיר ליחידה", W - m - 80 * mm),
+        ("סה\"כ", W - m - 120 * mm),
     ]
     for text, pos in headers:
-        c.drawRightString(pos, y, text)
+        draw_rtl(c, pos, y, text, PDF_FONT, fontsize=11)
 
-    y -= 30
-    c.setFont(hebrew_font, 10)
+    y -= 6 * mm
+    c.setFont(PDF_FONT, 10)
     c.setFillColorRGB(0, 0, 0)
-    for idx, row in items_df.iterrows():
-        c.setFillColorRGB(0.95, 0.95, 0.95) if idx % 2 == 0 else c.setFillColorRGB(1, 1, 1)
-        c.rect(50, y - 15, width - 100, 20, fill=1, stroke=0)
+    for i, rec in enumerate(items_df.to_dict(orient='records')):
+        if i % 2 == 0:
+            c.setFillColorRGB(0.95, 0.95, 0.95)
+            c.rect(m, y - 3 * mm, W - 2 * m, 6 * mm, fill=1, stroke=0)
         c.setFillColorRGB(0, 0, 0)
-        c.drawRightString(450, y, rtl(str(row['הפריט'])))
-        c.drawRightString(250, y, str(int(row['כמות'])))
-        c.drawRightString(150, y, f"₪{row['מחיר יחידה']:,.0f}")
-        c.drawRightString(70, y, f"₪{row['סהכ']:,.0f}")
-        y -= 25
-        if y < 150:
-            c.showPage()
-            y = height - 50
-            c.setFont(hebrew_font, 10)
+        draw_rtl(c, W - m, y, rec['הפריט'], PDF_FONT, 10)
+        c.drawRightString(W - m - 40 * mm, y, str(int(rec['כמות'])))
+        c.drawRightString(W - m - 80 * mm, y, f"₪{rec['מחיר יחידה']:.2f}")
+        c.drawRightString(W - m - 120 * mm, y, f"₪{rec['סהכ']:.2f}")
+        y -= 6 * mm
 
     y -= 20
     c.setLineWidth(2)
     c.setStrokeColorRGB(0.827, 0.184, 0.184)
-    c.line(50, y, width - 50, y)
+    c.line(m, y, W - m, y)
 
-    y -= 30
-    c.setFont(hebrew_font, 12)
+    y -= 10 * mm
+    c.setFont(PDF_FONT, 12)
     subtotal = items_df['סהכ'].sum()
     contractor_discount = float(customer_data.get('contractor_discount', 0))
     sub_after = subtotal - contractor_discount
@@ -362,60 +365,77 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     discount_amount = (sub_after + vat) * (customer_data['discount'] / 100)
     total = sub_after + vat - discount_amount
 
-    summary = [(rtl("סכום ביניים"), f"₪{subtotal:,.2f}")]
+    summary_lines = []
     if contractor_discount:
-        summary.append((rtl("הנחת קבלן"), f"-₪{contractor_discount:,.2f}"))
-    summary.extend([
+        summary_lines.append((rtl("הנחת קבלן"), f"-₪{contractor_discount:,.2f}"))
+    summary_lines.extend([
+        (rtl("סכום ביניים"), f"₪{sub_after:,.2f}"),
         (rtl('מע"מ (17%)'), f"₪{vat:,.2f}"),
         (rtl(f"הנחה ({customer_data['discount']}%)"), f"-₪{discount_amount:,.2f}")
     ])
-    for label, value in summary:
-        c.drawRightString(200, y, label)
-        c.drawRightString(70, y, value)
-        y -= 25
+    for label, value in summary_lines:
+        c.drawRightString(W - m, y, label)
+        c.drawRightString(W - m - 60 * mm, y, value)
+        y -= 6 * mm
 
-    y -= 10
-    c.setFont(hebrew_font, 14)
-    c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.drawRightString(200, y, rtl("סך הכל לתשלום"))
-    c.drawRightString(70, y, f"₪{total:,.2f}")
-
-    y -= 40
-    c.setFont(hebrew_font, 9)
-    conditions = [
-        rtl("הצעת המחיר תקפה ל-14 ימים ממועד הפקתה."),
-        rtl("ההצעה מיועדת ללקוח הספציפי בלבד ולא להעברה לחוץ."),
-        rtl("המחירים עשויים להשתנות והחברה אינה אחראית לטעויות."),
-        rtl("אישור ההצעה מהווה התחייבות לתשלום 10% מקדמה."),
-        rtl("הלקוח מתחייב לפנות נקודות מים וחשמל בהתאם לתכניות."),
-        rtl("אי עמידה בתנאים עלולה לגרור עיכובים וחריגות.")
-    ]
-    for line in conditions:
-        c.drawRightString(width - 50, y, line)
-        y -= 12
-    y -= 20
-    if y < 30 * mm:
-        y = 30 * mm
-    c.drawRightString(width - 50, y, rtl("חתימת הלקוח: _______________________"))
+    c.setFont(PDF_FONT, 12)
+    c.setFillColorRGB(1, 0, 0)
+    draw_rtl(c, W - m, y, "סך הכל לתשלום", PDF_FONT, 12)
+    c.drawRightString(W - m - 60 * mm, y, f"₪{total:,.2f}")
+    c.setFillColorRGB(0, 0, 0)
 
     c.showPage()
 
-    for demo in [demo1, demo2]:
-        if demo:
-            img = ImageReader(demo)
-            c.setFont(hebrew_font, 24)
-            c.setFillColorRGB(0.827, 0.184, 0.184)
-            c.drawCentredString(width / 2, height - 50, rtl("הדמיה"))
-            w, h = img.getSize()
-            max_w = width - 40 * mm
-            max_h = height - 40 * mm
-            ratio = min(max_w / w, max_h / h)
-            nw = w * ratio
-            nh = h * ratio
-            x = (width - nw) / 2
-            y_img = (height - nh) / 2
-            c.drawImage(img, x, y_img, width=nw, height=nh)
-            c.showPage()
+    if demo1 or demo2:
+        y_img = H - m
+        if demo1:
+            c.setFont(PDF_FONT, 24)
+            c.drawCentredString(W / 2, y_img, rtl("הדמיה"))
+            y_img -= 10 * mm
+            img1 = ImageReader(demo1)
+            w1, h1 = img1.getSize()
+            max_w = W - 40 * mm
+            max_h = (H / 2 - 40 * mm) if demo2 else H - 40 * mm
+            r1 = min(max_w / w1, max_h / h1)
+            nw1, nh1 = w1 * r1, h1 * r1
+            x1 = (W - nw1) / 2
+            c.drawImage(img1, x1, y_img - nh1, width=nw1, height=nh1)
+            y_img = y_img - nh1 - 20 * mm
+        if demo2:
+            c.setFont(PDF_FONT, 24)
+            c.drawCentredString(W / 2, y_img, rtl("הדמיית נקודות מים וחשמל"))
+            y_img -= 10 * mm
+            img2 = ImageReader(demo2)
+            w2, h2 = img2.getSize()
+            max_w = W - 40 * mm
+            max_h = H / 2 - 40 * mm if demo1 else H - 40 * mm
+            r2 = min(max_w / w2, max_h / h2)
+            nw2, nh2 = w2 * r2, h2 * r2
+            x2 = (W - nw2) / 2
+            c.drawImage(img2, x2, y_img - nh2, width=nw2, height=nh2)
+        c.showPage()
+
+    y = H - 30 * mm
+    c.setFont(PDF_FONT, 8)
+    for t in [
+        "הצעת המחיר תקפה ל-14 ימים ממועד הפקתה.",
+        "ההצעה מיועדת ללקוח הספציפי בלבד ולא להעברה לחוץ.",
+        "המחירים עשויים להשתנות והחברה אינה אחראית לטעויות.",
+        "אישור ההצעה מהווה התחייבות לתשלום 10% מקדמה.",
+        "הלקוח מתחייב לפנות נקודות מים וחשמל בהתאם לתכניות.",
+        "אי עמידה בתנאים עלולה לגרור עיכובים וחריגות."
+    ]:
+        draw_rtl(c, W - m, y, t, PDF_FONT, 8)
+        y -= 4 * mm
+    y -= 8 * mm
+    if y < 30 * mm:
+        y = 30 * mm
+    draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________", PDF_FONT, 12)
+
+    c.setFont(PDF_FONT, 10)
+    c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
+    c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
+    c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
 
     c.save()
     buffer.seek(0)
