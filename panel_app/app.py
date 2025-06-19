@@ -191,7 +191,9 @@ if 'customer_data' not in st.session_state:
         'phone': '',
         'address': '',
         'date': date.today(),
-        'discount': 0.0
+        'discount': 0.0,
+        'contractor': False,
+        'contractor_discount': 0.0
     }
 
 if 'selected_items' not in st.session_state:
@@ -333,10 +335,9 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     c.setFont(hebrew_font, 10)
     c.setFillColorRGB(0, 0, 0)
     for idx, row in items_df.iterrows():
-        if idx % 2 == 0:
-            c.setFillColorRGB(0.95, 0.95, 0.95)
-            c.rect(50, y - 15, width - 100, 20, fill=1)
-            c.setFillColorRGB(0, 0, 0)
+        c.setFillColorRGB(0.95, 0.95, 0.95) if idx % 2 == 0 else c.setFillColorRGB(1, 1, 1)
+        c.rect(50, y - 15, width - 100, 20, fill=1, stroke=0)
+        c.setFillColorRGB(0, 0, 0)
         c.drawRightString(450, y, rtl(str(row['הפריט'])))
         c.drawRightString(250, y, str(int(row['כמות'])))
         c.drawRightString(150, y, f"₪{row['מחיר יחידה']:,.0f}")
@@ -393,6 +394,8 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         c.drawRightString(width - 50, y, line)
         y -= 12
     y -= 20
+    if y < 30 * mm:
+        y = 30 * mm
     c.drawRightString(width - 50, y, rtl("חתימת הלקוח: _______________________"))
 
     c.showPage()
@@ -451,6 +454,20 @@ with tab1:
             value=st.session_state.customer_data['discount'],
             step=5.0
         )
+        st.session_state.customer_data['contractor'] = st.checkbox(
+            "הנחת קבלן",
+            value=st.session_state.customer_data.get('contractor', False)
+        )
+        if st.session_state.customer_data['contractor']:
+            st.session_state.customer_data['contractor_discount'] = st.number_input(
+                "סכום הנחת קבלן (₪):",
+                min_value=0.0,
+                value=st.session_state.customer_data.get('contractor_discount', 0.0),
+                step=100.0,
+                format="%.2f"
+            )
+        else:
+            st.session_state.customer_data['contractor_discount'] = 0.0
 
     st.session_state.customer_data['address'] = st.text_area(
         "כתובת:",
@@ -574,14 +591,25 @@ with tab3:
         demo_file = st.file_uploader(
             "גרור תמונת הדמיה לכאן או לחץ לבחירה",
             type=['png', 'jpg', 'jpeg'],
-            help="התמונה תתווסף כעמוד נפרד ב-PDF"
+            help="התמונה תתווסף כעמוד נפרד ב-PDF",
         )
 
         if demo_file:
             st.session_state.demo1 = demo_file
             st.success("ההדמיה נוספה בהצלחה!")
-            # הצגת תצוגה מקדימה
             st.image(demo_file, caption="תצוגה מקדימה של ההדמיה", use_column_width=True)
+
+        demo2_file = st.file_uploader(
+            "גרור הדמיית נקודות מים/חשמל",
+            type=['png', 'jpg', 'jpeg'],
+            help="תמונה זו תתווסף כעמוד נפרד ב-PDF",
+            key="demo2_upload",
+        )
+
+        if demo2_file:
+            st.session_state.demo2 = demo2_file
+            st.success("הדמיה נוספת נוספה בהצלחה!")
+            st.image(demo2_file, caption="תצוגה מקדימה של הדמיה נוספת", use_column_width=True)
 
         # כפתור יצירת PDF
         if st.button("🎯 צור הצעת מחיר", type="primary", use_container_width=True):
