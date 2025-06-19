@@ -313,7 +313,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         canv.setFillColorRGB(0.827, 0.184, 0.184)
         canv.rect(0, 0, W, 3 * mm, fill=1, stroke=0)
         x = m
-        logo_small = 'logo_small.png'
+        logo_small = 'Logo.png'
         logo_w = 0
         if os.path.exists(logo_small):
             img = ImageReader(logo_small)
@@ -329,7 +329,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         draw_rtl(canv, W - m, 10 * mm, f"עמוד {page} מתוך {total}", PDF_FONT, 8)
 
     def draw_header(canv):
-        logo_big = 'logo_big.png'
+        logo_big = 'Logo.png'
         logo_w = 35 * mm
         logo_h = 0
         if os.path.exists(logo_big):
@@ -387,10 +387,11 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             c.setFillColorRGB(0.95, 0.95, 0.95)
             c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=1, stroke=0)
         c.setFillColorRGB(0, 0, 0)
-        draw_rtl(c, W - m, y, rec['הפריט'], PDF_FONT, 10)
-        c.drawRightString(W - m - 40 * mm, y, str(int(rec['כמות'])))
-        c.drawRightString(W - m - 80 * mm, y, f"₪{rec['מחיר יחידה']:.2f}")
-        c.drawRightString(W - m - 120 * mm, y, f"₪{rec['סהכ']:.2f}")
+        text_y = y - ROW_HEIGHT / 2 - 1 * mm
+        draw_rtl(c, W - m, text_y, rec['הפריט'], PDF_FONT, 10)
+        c.drawRightString(W - m - 40 * mm, text_y, str(int(rec['כמות'])))
+        c.drawRightString(W - m - 80 * mm, text_y, f"₪{rec['מחיר יחידה']:.2f}")
+        c.drawRightString(W - m - 120 * mm, text_y, f"₪{rec['סהכ']:.2f}")
         c.setLineWidth(0.5)
         c.setStrokeColorRGB(0.8, 0.8, 0.8)
         for x_left, x_right in zip(x_cols, x_cols[1:]):
@@ -462,8 +463,9 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             nw2, nh2 = w2 * r2, h2 * r2
             x2 = (W - nw2) / 2
             c.drawImage(img2, x2, y_img - nh2, width=nw2, height=nh2)
+            y_img = y_img - nh2 - 20 * mm
 
-        y = H - 30 * mm
+        y = min(y_img, H - 30 * mm)
         c.setFont(PDF_FONT, 8)
         for t in [
             "הצעת המחיר תקפה ל-14 ימים ממועד הפקתה.",
