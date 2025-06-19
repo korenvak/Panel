@@ -71,9 +71,9 @@ def load_catalog(uploaded) -> pd.DataFrame:
 uploaded_file = st.file_uploader("העלה קובץ קטלוג (Excel):", type=['xlsx'])
 if uploaded_file:
     catalog = load_catalog(uploaded_file)
-    cols = [c for c in ['קטגוריה','הערות','הפריט','מחיר יחידה'] if c in catalog.columns]
+    display_cols = [c for c in ['קטגוריה','הערות','הפריט','מחיר יחידה'] if c in catalog.columns]
     st.subheader("קטלוג מוצרים")
-    st.dataframe(catalog[cols])
+    st.dataframe(catalog[display_cols])
 
     choice = st.multiselect(
         "בחר מוצרים:",
@@ -125,16 +125,18 @@ if uploaded_file:
 
             # טבלת מוצרים במבנה RTL
             y -= 20*mm
-            draw_rtl(c, W - m, y, "סהכ", fontsize=12)
-            draw_rtl(c, W - m - 50*mm, y, "מחיר ליחידה", fontsize=12)
-            draw_rtl(c, m + 80*mm, y, "כמות", fontsize=12)
-            draw_rtl(c, m, y, "מוצר", fontsize=12)
+            # סדר העמודות מימין לשמאל: מוצר | כמות | מחיר יחידה | סהכ
+            draw_rtl(c, W - m, y, "מוצר", fontsize=12)
+            draw_rtl(c, W - m - 50*mm, y, "כמות", fontsize=12)
+            draw_rtl(c, W - m - 100*mm, y, "מחיר יחידה", fontsize=12)
+            draw_rtl(c, W - m - 150*mm, y, "סהכ", fontsize=12)
             y -= 6*mm
             for rec in order.to_dict(orient='records'):
-                c.drawString(m, y, rec['הפריט'])
-                c.drawRightString(m + 80*mm, y, str(int(rec['כמות'])))
-                c.drawRightString(W - m - 50*mm, y, f"{rec['מחיר יחידה']:.2f}")
-                c.drawRightString(W - m, y, f"{rec['סהכ']:.2f}")
+                # נתוני שורה לפי RTL
+                draw_rtl(c, W - m, y, rec['הפריט'], fontsize=12)
+                c.drawRightString(W - m - 50*mm, y, str(int(rec['כמות'])))
+                c.drawRightString(W - m - 100*mm, y, f"{rec['מחיר יחידה']:.2f}")
+                c.drawRightString(W - m - 150*mm, y, f"{rec['סהכ']:.2f}")
                 y -= 6*mm
 
             # סיכומים במבנה RTL: תווית ואז ערך
@@ -145,7 +147,7 @@ if uploaded_file:
             draw_rtl(c, m + 20*mm, y, "מע\"מ (17%)", fontsize=12)
             c.drawRightString(W - m, y, f"{vat:.2f}")
             y -= 6*mm
-            draw_rtl(c, m + 20*mm, y, f"הנחה ({discount_pct}%)", fontsize=12)
+            draw_rtl(c, m + 20*mm, y, f"הנחה ({discount_pct}% )", fontsize=12)
             c.drawRightString(W - m, y, f"-{disc:.2f}")
             y -= 6*mm
             draw_rtl(c, m + 20*mm, y, "סך הכל לתשלום", fontsize=12)
@@ -155,7 +157,7 @@ if uploaded_file:
             y = m + 30*mm
             validity = (offer_date + pd.Timedelta(days=30)).strftime('%Y-%m-%d')
             draw_rtl(c, W - m, y + 10*mm, f"הצעה תקפה עד ל-{validity}", fontsize=10)
-            draw_rtl(c, m, y, "חתימת הלקוח: ____________________________", fontsize=12)
+            draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________________", fontsize=12)
 
             c.showPage()
             c.save()
