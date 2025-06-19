@@ -343,7 +343,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         canv.drawCentredString(W / 2, H - m - logo_h - 10 * mm, rtl('הצעת מחיר'))
         return H - m - logo_h - 20 * mm
 
-    pages_total = 2
+    pages_total = 1 + int(demo1 is not None or demo2 is not None)
     page_num = 1
 
 
@@ -381,6 +381,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     y -= ROW_HEIGHT
     c.setFont(PDF_FONT, 10)
     c.setFillColorRGB(0, 0, 0)
+    x_cols = [m, W - m - 120 * mm, W - m - 80 * mm, W - m - 40 * mm, W - m]
     for i, rec in enumerate(items_df.to_dict(orient='records')):
         if i % 2 == 0:
             c.setFillColorRGB(0.95, 0.95, 0.95)
@@ -392,7 +393,8 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         c.drawRightString(W - m - 120 * mm, y, f"₪{rec['סהכ']:.2f}")
         c.setLineWidth(0.5)
         c.setStrokeColorRGB(0.8, 0.8, 0.8)
-        c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=0, stroke=1)
+        for x_left, x_right in zip(x_cols, x_cols[1:]):
+            c.rect(x_left, y - ROW_HEIGHT, x_right - x_left, ROW_HEIGHT, fill=0, stroke=1)
         y -= ROW_HEIGHT
 
     y -= 20 * mm
@@ -428,11 +430,11 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     c.drawRightString(W - m - 60 * mm, y, f"₪{total:,.2f}")
     c.setFillColorRGB(0, 0, 0)
 
-    draw_footer(c, page_num, pages_total)
-    c.showPage()
-    page_num += 1
-
     if demo1 or demo2:
+        draw_footer(c, page_num, pages_total)
+        c.showPage()
+        page_num += 1
+
         y_img = draw_header(c)
         draw_watermark(c)
         if demo1:
@@ -461,30 +463,53 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             x2 = (W - nw2) / 2
             c.drawImage(img2, x2, y_img - nh2, width=nw2, height=nh2)
 
-    y = H - 30 * mm
-    c.setFont(PDF_FONT, 8)
-    for t in [
-        "הצעת המחיר תקפה ל-14 ימים ממועד הפקתה.",
-        "ההצעה מיועדת ללקוח הספציפי בלבד ולא להעברה לחוץ.",
-        "המחירים עשויים להשתנות והחברה אינה אחראית לטעויות.",
-        "אישור ההצעה מהווה התחייבות לתשלום 10% מקדמה.",
-        "הלקוח מתחייב לפנות נקודות מים וחשמל בהתאם לתכניות.",
-        "אי עמידה בתנאים עלולה לגרור עיכובים וחריגות."
-    ]:
-        draw_rtl(c, W - m, y, t, PDF_FONT, 8)
-        y -= 4 * mm
-    y -= 8 * mm
-    if y < 30 * mm:
-        y = 30 * mm
-    draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________", PDF_FONT, 12)
-
-    c.setFont(PDF_FONT, 10)
-    c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
-    c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
-    c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
-    draw_footer(c, page_num, pages_total)
-    c.showPage()
-    page_num += 1
+        y = H - 30 * mm
+        c.setFont(PDF_FONT, 8)
+        for t in [
+            "הצעת המחיר תקפה ל-14 ימים ממועד הפקתה.",
+            "ההצעה מיועדת ללקוח הספציפי בלבד ולא להעברה לחוץ.",
+            "המחירים עשויים להשתנות והחברה אינה אחראית לטעויות.",
+            "אישור ההצעה מהווה התחייבות לתשלום 10% מקדמה.",
+            "הלקוח מתחייב לפנות נקודות מים וחשמל בהתאם לתכניות.",
+            "אי עמידה בתנאים עלולה לגרור עיכובים וחריגות."
+        ]:
+            draw_rtl(c, W - m, y, t, PDF_FONT, 8)
+            y -= 4 * mm
+        y -= 8 * mm
+        if y < 30 * mm:
+            y = 30 * mm
+        draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________", PDF_FONT, 12)
+        c.setFont(PDF_FONT, 10)
+        c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
+        c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
+        c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
+        draw_footer(c, page_num, pages_total)
+        c.showPage()
+        page_num += 1
+    else:
+        y -= 10 * mm
+        c.setFont(PDF_FONT, 8)
+        for t in [
+            "הצעת המחיר תקפה ל-14 ימים ממועד הפקתה.",
+            "ההצעה מיועדת ללקוח הספציפי בלבד ולא להעברה לחוץ.",
+            "המחירים עשויים להשתנות והחברה אינה אחראית לטעויות.",
+            "אישור ההצעה מהווה התחייבות לתשלום 10% מקדמה.",
+            "הלקוח מתחייב לפנות נקודות מים וחשמל בהתאם לתכניות.",
+            "אי עמידה בתנאים עלולה לגרור עיכובים וחריגות."
+        ]:
+            draw_rtl(c, W - m, y, t, PDF_FONT, 8)
+            y -= 4 * mm
+        y -= 8 * mm
+        if y < 30 * mm:
+            y = 30 * mm
+        draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________", PDF_FONT, 12)
+        c.setFont(PDF_FONT, 10)
+        c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
+        c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
+        c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
+        draw_footer(c, page_num, pages_total)
+        c.showPage()
+        page_num += 1
 
     c.save()
     buffer.seek(0)
