@@ -1,0 +1,92 @@
+/* RTL support */
+.stApp {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Header styling */
+.main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.logo-container {
+    flex: 1;
+    text-align: center;
+}
+
+.title-container {
+    flex: 2;
+    text-align: right;
+}
+
+h1 {
+    color: #d32f2f;
+    font-family: 'Heebo', sans-serif;
+    margin: 0;
+}
+
+/* Table styling */
+.dataframe {
+    text-align: right !important;
+    direction: rtl !important;
+}
+
+/* Input styling */
+.stNumberInput > div > div > input {
+    text-align: center;
+    background-color: #f5f5f5;
+}
+
+.stNumberInput[value="0"] > div > div > input {
+    background-color: white;
+}
+
+/* Button styling */
+.stButton > button {
+    background-color: #d32f2f;
+    color: white;
+    font-weight: bold;
+    border-radius: 5px;
+    border: none;
+    padding: 0.5rem 2rem;
+    transition: all 0.3s;
+}
+
+.stButton > button:hover {
+    background-color: #b71c1c;
+    transform: scale(1.05);
+}
+
+/* Summary box */
+.summary-box {
+    background-color: #f5f5f5;
+    padding: 1.5rem;
+    border-radius: 10px;
+    border: 2px solid #d32f2f;
+    margin-top: 1rem;
+}
+
+/* File uploader */
+.stFileUploader {
+    background-color: #fff3e0;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 2px dashed #ff6f00;
+}
+
+/* Category header */
+.category-header {
+    background-color: #d32f2f;
+    color: white;
+    padding: 0.5rem;
+    margin: 1rem 0;
+    border-radius: 5px;
+    font-weight: bold;
+}
