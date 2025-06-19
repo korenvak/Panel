@@ -1,172 +1,643 @@
 import streamlit as st
-st.set_page_config(page_title="הצעת מחיר", layout="centered")
-
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
+from PIL import Image as PILImage
 import tempfile
 import os
-import arabic_reshaper
-from bidi.algorithm import get_display
+import io
+import base64
 
-# פונקציה לשינוי טקסט ל־RTL עם shaping
-def rtl(text: str) -> str:
-    return get_display(arabic_reshaper.reshape(text))
+# הגדרות עמוד
+st.set_page_config(
+    page_title="Panel Kitchens - הצעות מחיר",
+    page_icon="🍳",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# ציור טקסט RTL ב־PDF
-def draw_rtl(cnv, x, y, text, fontname='Alef', fontsize=12):
-    cnv.setFont(fontname, fontsize)
-    cnv.drawRightString(x, y, rtl(text))
+# CSS מותאם אישית
+st.markdown("""
+<style>
+    /* RTL support */
+    .stApp {
+        direction: rtl;
+        text-align: right;
+    }
 
-# כותרת ראשית ב־UI
-st.title("הצעת מחיר")
+    /* Header styling */
+    .main-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
 
-# איתור וטענת פונט עברי ל־PDF
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ttf_files = [f for f in os.listdir(BASE_DIR) if f.lower().endswith('.ttf')]
-if ttf_files:
-    font_file = os.path.join(BASE_DIR, ttf_files[0])
+    .logo-container {
+        flex: 1;
+        text-align: center;
+    }
+
+    .title-container {
+        flex: 2;
+        text-align: right;
+    }
+
+    h1 {
+        color: #d32f2f;
+        font-family: 'Heebo', sans-serif;
+        margin: 0;
+    }
+
+    /* Table styling */
+    .dataframe {
+        text-align: right !important;
+        direction: rtl !important;
+    }
+
+    /* Input styling */
+    .stNumberInput > div > div > input {
+        text-align: center;
+        background-color: #f5f5f5;
+    }
+
+    .stNumberInput[value="0"] > div > div > input {
+        background-color: white;
+    }
+
+    /* Button styling */
+    .stButton > button {
+        background-color: #d32f2f;
+        color: white;
+        font-weight: bold;
+        border-radius: 5px;
+        border: none;
+        padding: 0.5rem 2rem;
+        transition: all 0.3s;
+    }
+
+    .stButton > button:hover {
+        background-color: #b71c1c;
+        transform: scale(1.05);
+    }
+
+    /* Summary box */
+    .summary-box {
+        background-color: #f5f5f5;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 2px solid #d32f2f;
+        margin-top: 1rem;
+    }
+
+    /* File uploader */
+    .stFileUploader {
+        background-color: #fff3e0;
+        padding: 1rem;
+        border-radius: 10px;
+        border: 2px dashed #ff6f00;
+    }
+
+    /* Category header */
+    .category-header {
+        background-color: #d32f2f;
+        color: white;
+        padding: 0.5rem;
+        margin: 1rem 0;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# פונקציה להיפוך טקסט עברי
+def reverse_hebrew(text):
+    """הפוך טקסט עברי לתצוגה נכונה"""
+    if isinstance(text, str):
+        # בדיקה אם הטקסט מכיל עברית
+        if any('\u0590' <= char <= '\u05FF' for char in text):
+            return text[::-1]
+    return text
+
+
+# Header עם לוגו
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    # בדיקה אם קיים לוגו
+    logo_path = None
+    for ext in ['png', 'jpg', 'jpeg']:
+        if os.path.exists(f'logo.{ext}'):
+            logo_path = f'logo.{ext}'
+            break
+        elif os.path.exists(f'Logo.{ext}'):
+            logo_path = f'Logo.{ext}'
+            break
+
+    if logo_path:
+        logo_col, title_col = st.columns([1, 3])
+        with logo_col:
+            st.image(logo_path, width=150)
+        with title_col:
+            st.markdown("""
+            <div class="title-container">
+                <h1>מערכת הצעות מחיר</h1>
+                <p style="color: #666; margin: 0;">Panel Kitchens - מטבחים באיכות גבוהה</p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="main-header">
+            <div class="title-container">
+                <h1>מערכת הצעות מחיר</h1>
+                <p style="color: #666; margin: 0;">Panel Kitchens - מטבחים באיכות גבוהה</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# אתחול session state
+if 'customer_data' not in st.session_state:
+    st.session_state.customer_data = {
+        'name': '',
+        'phone': '',
+        'address': '',
+        'date': date.today(),
+        'discount': 0.0
+    }
+
+if 'selected_items' not in st.session_state:
+    st.session_state.selected_items = pd.DataFrame()
+
+if 'demo_image' not in st.session_state:
+    st.session_state.demo_image = None
+
+
+# פונקציה לטעינת קטלוג
+@st.cache_data
+def load_catalog(file):
     try:
-        pdfmetrics.registerFont(TTFont('Alef', font_file))
-        pdf_font = 'Alef'
-    except Exception:
-        pdf_font = 'Helvetica'
-else:
-    pdf_font = 'Helvetica'
+        df = pd.read_excel(file, sheet_name='גיליון1', header=8, engine='openpyxl')
+        df.columns = df.columns.str.strip()
 
-# טופס פרטי הלקוח
-with st.form('customer_form'):
+        # שינוי שמות עמודות
+        rename_dict = {
+            "מס'": "מספר",
+            'סה"כ': 'סהכ'
+        }
+        df.rename(columns=rename_dict, inplace=True)
+
+        # חיפוש עמודת פריט
+        for col in df.columns:
+            if 'פריט' in col and col != 'הפריט':
+                df.rename(columns={col: 'הפריט'}, inplace=True)
+                break
+
+        # הוספת עמודת כמות
+        df['כמות'] = 0
+
+        # הוספת עמודת קטגוריה
+        df['קטגוריה'] = ''
+        current_category = ''
+
+        for idx in df.index:
+            # בדיקה אם זו שורת קטגוריה (אין מחיר יחידה)
+            if pd.isna(df.at[idx, 'מחיר יחידה']) or df.at[idx, 'מחיר יחידה'] == '':
+                # זיהוי קטגוריה מהעמודה הראשונה שיש בה טקסט
+                for col in df.columns:
+                    if pd.notna(df.at[idx, col]) and str(df.at[idx, col]).strip() != '':
+                        current_category = str(df.at[idx, col]).strip()
+                        break
+            else:
+                df.at[idx, 'קטגוריה'] = current_category
+
+        # סינון רק שורות עם מחיר יחידה
+        df = df[pd.notna(df['מחיר יחידה'])].copy()
+
+        # המרת מחיר יחידה למספר
+        df['מחיר יחידה'] = pd.to_numeric(df['מחיר יחידה'], errors='coerce').fillna(0)
+
+        # טיפול בעמודת הערות
+        if 'הערות' not in df.columns:
+            df['הערות'] = ''
+        df['הערות'] = df['הערות'].fillna('')
+
+        return df
+    except Exception as e:
+        st.error(f"שגיאה בטעינת הקובץ: {str(e)}")
+        return None
+
+
+# יצירת PDF משופר
+def create_enhanced_pdf(customer_data, items_df, demo_image=None):
+    """יצירת PDF עם עיצוב משופר"""
+    buffer = io.BytesIO()
+
+    # יצירת Canvas
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    # נסיון לטעון פונט עברי
+    try:
+        # נסיון ראשון - קובץ פונט מקומי
+        font_path = os.path.join(os.path.dirname(__file__), 'Alef-Regular.ttf')
+        if os.path.exists(font_path):
+            pdfmetrics.registerFont(TTFont('Hebrew', font_path))
+            hebrew_font = 'Hebrew'
+        else:
+            # נסיון שני - פונט Arial של Windows
+            try:
+                pdfmetrics.registerFont(TTFont('Hebrew', 'C:/Windows/Fonts/Arial.ttf'))
+                hebrew_font = 'Hebrew'
+            except:
+                hebrew_font = 'Helvetica'
+    except:
+        hebrew_font = 'Helvetica'
+
+    # עמוד ראשון - הצעת מחיר
+
+    # הוספת לוגו
+    logo_path = None
+    for ext in ['png', 'jpg', 'jpeg']:
+        if os.path.exists(f'logo.{ext}'):
+            logo_path = f'logo.{ext}'
+            break
+        elif os.path.exists(f'Logo.{ext}'):
+            logo_path = f'Logo.{ext}'
+            break
+
+    if logo_path:
+        try:
+            # הוספת לוגו בפינה הימנית העליונה
+            logo = ImageReader(logo_path)
+            c.drawImage(logo, width - 150, height - 100, width=100, height=50, preserveAspectRatio=True)
+        except Exception as e:
+            print(f"Error loading logo: {e}")
+
+    # כותרת
+    y = height - 80
+    c.setFont(hebrew_font, 24)
+    c.setFillColorRGB(0.827, 0.184, 0.184)  # צבע אדום
+    title_text = reverse_hebrew("הצעת מחיר")
+    c.drawCentredString(width / 2, y, title_text)
+
+    # פרטי לקוח
+    y -= 60
+    c.setFont(hebrew_font, 12)
+    c.setFillColorRGB(0, 0, 0)
+
+    customer_details = [
+        (reverse_hebrew("לכבוד:"), reverse_hebrew(customer_data['name'])),
+        (reverse_hebrew("תאריך:"), customer_data['date'].strftime('%d/%m/%Y')),
+        (reverse_hebrew("טלפון:"), customer_data['phone']),
+        (reverse_hebrew("כתובת:"), reverse_hebrew(customer_data['address']))
+    ]
+
+    for label, value in customer_details:
+        c.drawRightString(width - 50, y, f"{label} {value}")
+        y -= 20
+
+    # טבלת מוצרים
+    y -= 30
+
+    # כותרות טבלה
+    c.setFont(hebrew_font, 11)
+    c.setFillColorRGB(1, 1, 1)  # לבן
+
+    # רקע אדום לכותרות
+    c.setFillColorRGB(0.827, 0.184, 0.184)
+    c.rect(50, y - 15, width - 100, 25, fill=1)
+
+    # טקסט כותרות
+    c.setFillColorRGB(1, 1, 1)
+    headers = [
+        (reverse_hebrew("מוצר"), 450),
+        (reverse_hebrew("הערות"), 350),
+        (reverse_hebrew("כמות"), 250),
+        (reverse_hebrew("מחיר יחידה"), 150),
+        (reverse_hebrew("סהכ"), 70)
+    ]
+
+    for header, x_pos in headers:
+        c.drawRightString(x_pos, y, header)
+
+    y -= 30
+
+    # שורות הטבלה
+    c.setFont(hebrew_font, 10)
+    c.setFillColorRGB(0, 0, 0)
+
+    for idx, row in items_df.iterrows():
+        # רקע אפור לשורות זוגיות
+        if idx % 2 == 0:
+            c.setFillColorRGB(0.95, 0.95, 0.95)
+            c.rect(50, y - 15, width - 100, 20, fill=1)
+            c.setFillColorRGB(0, 0, 0)
+
+        # נתוני שורה
+        c.drawRightString(450, y, reverse_hebrew(str(row['הפריט'])))
+        c.drawRightString(350, y, reverse_hebrew(str(row['הערות'])))
+        c.drawRightString(250, y, str(int(row['כמות'])))
+        c.drawRightString(150, y, f"₪{row['מחיר יחידה']:,.0f}")
+        c.drawRightString(70, y, f"₪{row['סהכ']:,.0f}")
+
+        y -= 25
+
+        # בדיקה אם צריך עמוד חדש
+        if y < 100:
+            c.showPage()
+            y = height - 50
+            c.setFont(hebrew_font, 10)
+
+    # סיכומים
+    y -= 20
+    c.setLineWidth(2)
+    c.setStrokeColorRGB(0.827, 0.184, 0.184)
+    c.line(50, y, width - 50, y)
+
+    y -= 30
+    c.setFont(hebrew_font, 12)
+
+    # חישובים
+    subtotal = items_df['סהכ'].sum()
+    vat = subtotal * 0.17
+    discount_amount = (subtotal + vat) * (customer_data['discount'] / 100)
+    total = subtotal + vat - discount_amount
+
+    # הצגת סיכומים
+    summary_items = [
+        (reverse_hebrew("סכום ביניים"), f"₪{subtotal:,.2f}"),
+        (reverse_hebrew("מע\"מ (17%)"), f"₪{vat:,.2f}"),
+        (reverse_hebrew(f"הנחה ({customer_data['discount']}%)"), f"-₪{discount_amount:,.2f}"),
+    ]
+
+    for label, value in summary_items:
+        c.drawRightString(200, y, label)
+        c.drawRightString(70, y, value)
+        y -= 25
+
+    # סך הכל - מודגש
+    y -= 10
+    c.setFont(hebrew_font, 14)
+    c.setFillColorRGB(0.827, 0.184, 0.184)
+    c.drawRightString(200, y, reverse_hebrew("סך הכל לתשלום"))
+    c.drawRightString(70, y, f"₪{total:,.2f}")
+
+    # תוקף וחתימה
+    y = 100
+    c.setFont(hebrew_font, 10)
+    c.setFillColorRGB(0, 0, 0)
+    validity = (customer_data['date'] + timedelta(days=30)).strftime('%d/%m/%Y')
+    c.drawRightString(width - 50, y, reverse_hebrew(f"הצעה זו תקפה עד לתאריך: {validity}"))
+
+    y -= 30
+    c.drawRightString(width - 50, y, reverse_hebrew("חתימת הלקוח: _______________________________"))
+
+    # שמירת העמוד הראשון
+    c.showPage()
+
+    # עמוד הדמיה אם קיים
+    if demo_image:
+        # כותרת
+        y = height - 50
+        c.setFont(hebrew_font, 24)
+        c.setFillColorRGB(0.827, 0.184, 0.184)
+        c.drawCentredString(width / 2, y, reverse_hebrew("הדמיה"))
+
+        # הוספת תמונה
+        try:
+            img = ImageReader(demo_image)
+
+            # חישוב גודל תמונה
+            img_width, img_height = img.getSize()
+            max_width = width - 100
+            max_height = height - 200
+
+            # התאמת גודל
+            ratio = min(max_width / img_width, max_height / img_height)
+            new_width = img_width * ratio
+            new_height = img_height * ratio
+
+            # מיקום מרכזי
+            x = (width - new_width) / 2
+            y = (height - new_height) / 2
+
+            c.drawImage(img, x, y, width=new_width, height=new_height)
+        except Exception as e:
+            c.drawString(100, height - 100, f"Error loading image: {str(e)}")
+
+        c.showPage()
+
+    # שמירה וסיום
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
+# ממשק משתמש ראשי
+tab1, tab2, tab3 = st.tabs(["📝 פרטי לקוח", "🛒 בחירת מוצרים", "📄 יצירת הצעה"])
+
+# טאב 1: פרטי לקוח
+with tab1:
+    st.subheader("הזן פרטי לקוח")
+
     col1, col2 = st.columns(2)
     with col1:
-        name = st.text_input("שם הלקוח:")
-        phone = st.text_input("טלפון:")
-        address = st.text_area("כתובת:")
+        st.session_state.customer_data['name'] = st.text_input(
+            "שם הלקוח:",
+            value=st.session_state.customer_data['name'],
+            placeholder="הזן שם מלא"
+        )
+        st.session_state.customer_data['phone'] = st.text_input(
+            "טלפון:",
+            value=st.session_state.customer_data['phone'],
+            placeholder="050-1234567"
+        )
+
     with col2:
-        offer_date = st.date_input("תאריך:", value=date.today())
-        discount_pct = st.number_input("אחוז הנחה:", min_value=0.0, max_value=100.0, value=0.0)
-    submitted = st.form_submit_button("אשר פרטי לקוח")
+        st.session_state.customer_data['date'] = st.date_input(
+            "תאריך:",
+            value=st.session_state.customer_data['date']
+        )
+        st.session_state.customer_data['discount'] = st.number_input(
+            "אחוז הנחה:",
+            min_value=0.0,
+            max_value=100.0,
+            value=st.session_state.customer_data['discount'],
+            step=5.0
+        )
 
-if submitted:
-    st.success(f"פרטי הלקוח נקלטו: {name}, {phone}, {address}")
-
-@st.cache_data
-def load_catalog(uploaded) -> pd.DataFrame:
-    df = pd.read_excel(uploaded, sheet_name='גיליון1', header=8, engine='openpyxl')
-    df.columns = df.columns.str.strip()
-    if "מס'" in df.columns:
-        df.rename(columns={"מס'": "קטגוריה"}, inplace=True)
-    for col in df.columns:
-        if 'פריט' in col and col != 'הפריט':
-            df.rename(columns={col: 'הפריט'}, inplace=True)
-            break
-    if 'סה"כ' in df.columns:
-        df.rename(columns={'סה"כ': 'סהכ'}, inplace=True)
-    return df
-
-# העלאת קטלוג ובחירת מוצרים
-uploaded_file = st.file_uploader("העלה קובץ קטלוג (Excel):", type=['xlsx'])
-if uploaded_file:
-    catalog = load_catalog(uploaded_file)
-    display_cols = [c for c in ['קטגוריה','הערות','הפריט','מחיר יחידה'] if c in catalog.columns]
-    st.subheader("קטלוג מוצרים")
-    st.dataframe(catalog[display_cols])
-
-    choice = st.multiselect(
-        "בחר מוצרים:",
-        options=catalog.index,
-        format_func=lambda i: f"{catalog.at[i,'הפריט']} ({catalog.at[i,'קטגוריה']})"
+    st.session_state.customer_data['address'] = st.text_area(
+        "כתובת:",
+        value=st.session_state.customer_data['address'],
+        placeholder="רחוב, מספר, עיר",
+        height=100
     )
 
-    if choice:
-        order = catalog.loc[choice, ['הפריט','מחיר יחידה']].copy()
-        for idx in choice:
-            qty = st.number_input(f"כמות עבור {catalog.at[idx,'הפריט']}:", min_value=1, value=1, key=f"qty_{idx}")
-            order.at[idx,'כמות'] = qty
-        order['סהכ'] = order['מחיר יחידה'] * order['כמות']
+# טאב 2: בחירת מוצרים
+with tab2:
+    st.subheader("בחר מוצרים מהקטלוג")
 
-        st.subheader("פרטי הזמנה")
-        st.dataframe(order[['הפריט','כמות','מחיר יחידה','סהכ']])
+    # העלאת קובץ עם drag & drop
+    uploaded_file = st.file_uploader(
+        "גרור קובץ קטלוג לכאן או לחץ לבחירה",
+        type=['xlsx', 'xls'],
+        help="קובץ Excel עם רשימת המוצרים"
+    )
 
-        sub = order['סהכ'].sum()
-        vat = sub * 0.17
-        disc = (sub + vat) * (discount_pct/100)
-        tot = sub + vat - disc
+    if uploaded_file:
+        catalog_df = load_catalog(uploaded_file)
 
-        # הצגת סכומים ב־UI
-        st.markdown(f"**סכום ביניים:** {sub:.2f} ₪")
-        st.markdown(f"**מע\"מ (17%):** {vat:.2f} ₪")
-        st.markdown(f"**הנחה ({discount_pct}%):** -{disc:.2f} ₪")
-        st.markdown(f"**סך הכל לתשלום:** {tot:.2f} ₪")
+        if catalog_df is not None:
+            st.success("הקטלוג נטען בהצלחה!")
 
-        # יצירת PDF
-        if st.button("ייצא ל-PDF"):
-            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-            c = canvas.Canvas(tmp_file.name, pagesize=A4)
-            W, H = A4
-            m = 20 * mm
+            # הצגת טבלה עם אפשרות עריכה
+            st.markdown("### רשימת מוצרים - הזן כמות ליד כל מוצר")
 
-            # לוגו
-            logo_path = os.path.join(BASE_DIR, 'Logo.jpeg')
-            if os.path.exists(logo_path):
-                c.drawImage(logo_path, m, H - m - 40*mm, width=40*mm, preserveAspectRatio=True)
+            # יצירת עותק לעריכה
+            edited_df = catalog_df.copy()
 
-            # כותרת ופרטים
-            draw_rtl(c, W - m, H - m, f"הצעת מחיר ל-{name}", fontsize=16)
-            y = H - m - 50*mm
-            draw_rtl(c, W - m, y, f"תאריך: {offer_date}", fontsize=12)
-            y -= 6*mm
-            draw_rtl(c, W - m, y, f"טלפון: {phone}", fontsize=12)
-            y -= 6*mm
-            draw_rtl(c, W - m, y, f"כתובת: {address}", fontsize=12)
+            # קיבוץ לפי קטגוריות
+            categories = edited_df['קטגוריה'].unique()
 
-            # טבלת מוצרים במבנה RTL
-            y -= 20*mm
-            # סדר העמודות מימין לשמאל: מוצר | כמות | מחיר יחידה | סהכ
-            draw_rtl(c, W - m, y, "מוצר", fontsize=12)
-            draw_rtl(c, W - m - 50*mm, y, "כמות", fontsize=12)
-            draw_rtl(c, W - m - 100*mm, y, "מחיר יחידה", fontsize=12)
-            draw_rtl(c, W - m - 150*mm, y, "סהכ", fontsize=12)
-            y -= 6*mm
-            for rec in order.to_dict(orient='records'):
-                # נתוני שורה לפי RTL
-                draw_rtl(c, W - m, y, rec['הפריט'], fontsize=12)
-                c.drawRightString(W - m - 50*mm, y, str(int(rec['כמות'])))
-                c.drawRightString(W - m - 100*mm, y, f"{rec['מחיר יחידה']:.2f}")
-                c.drawRightString(W - m - 150*mm, y, f"{rec['סהכ']:.2f}")
-                y -= 6*mm
+            for category in categories:
+                if category:  # רק אם יש קטגוריה
+                    st.markdown(f"<div class='category-header'>{category}</div>", unsafe_allow_html=True)
 
-            # סיכומים במבנה RTL: תווית ואז ערך
-            y -= 10*mm
-            draw_rtl(c, m + 20*mm, y, "סכום ביניים", fontsize=12)
-            c.drawRightString(W - m, y, f"{sub:.2f}")
-            y -= 6*mm
-            draw_rtl(c, m + 20*mm, y, "מע\"מ (17%)", fontsize=12)
-            c.drawRightString(W - m, y, f"{vat:.2f}")
-            y -= 6*mm
-            draw_rtl(c, m + 20*mm, y, f"הנחה ({discount_pct}% )", fontsize=12)
-            c.drawRightString(W - m, y, f"-{disc:.2f}")
-            y -= 6*mm
-            draw_rtl(c, m + 20*mm, y, "סך הכל לתשלום", fontsize=12)
-            c.drawRightString(W - m, y, f"{tot:.2f}")
+                category_df = edited_df[edited_df['קטגוריה'] == category]
 
-            # Footer ושיפור מיקום החתימה
-            y = m + 30*mm
-            validity = (offer_date + pd.Timedelta(days=30)).strftime('%Y-%m-%d')
-            draw_rtl(c, W - m, y + 10*mm, f"הצעה תקפה עד ל-{validity}", fontsize=10)
-            draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________________", fontsize=12)
+                # הצגת טבלה בלולאה עם input לכמות
+                for idx in category_df.index:
+                    col1, col2, col3, col4, col5, col6 = st.columns([3, 2, 1.5, 1, 1, 1])
 
-            c.showPage()
-            c.save()
+                    with col1:
+                        st.write(edited_df.at[idx, 'הפריט'])
+                    with col2:
+                        st.write(edited_df.at[idx, 'הערות'])
+                    with col3:
+                        price = edited_df.at[idx, 'מחיר יחידה']
+                        if pd.notna(price) and price != 0:
+                            st.write(f"₪{price:,.0f}")
+                        else:
+                            st.write("לפי מידה")
+                    with col4:
+                        qty = st.number_input(
+                            "כמות",
+                            min_value=0,
+                            value=0,
+                            step=1,
+                            key=f"qty_{idx}",
+                            label_visibility="collapsed"
+                        )
+                        edited_df.at[idx, 'כמות'] = qty
+                    with col5:
+                        if qty > 0 and pd.notna(price) and price != 0:
+                            total = qty * price
+                            st.write(f"₪{total:,.0f}")
+                            edited_df.at[idx, 'סהכ'] = total
+                        else:
+                            st.write("-")
+                            edited_df.at[idx, 'סהכ'] = 0
 
-            with open(tmp_file.name, 'rb') as f:
-                pdf_bytes = f.read()
-            st.download_button(
-                label="הורד הצעת מחיר כ-PDF",
-                data=pdf_bytes,
-                file_name=f"offer_{name}_{offer_date}.pdf",
-                mime='application/pdf'
-            )
+            # סינון רק פריטים שנבחרו
+            selected_df = edited_df[edited_df['כמות'] > 0].copy()
+
+            if not selected_df.empty:
+                st.session_state.selected_items = selected_df
+
+                # הצגת סיכום
+                st.markdown("### סיכום הזמנה")
+                display_columns = ['הפריט', 'הערות', 'כמות', 'מחיר יחידה', 'סהכ']
+                st.dataframe(
+                    selected_df[display_columns],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # חישוב סכומים
+                subtotal = selected_df['סהכ'].sum()
+                vat = subtotal * 0.17
+                discount = (subtotal + vat) * (st.session_state.customer_data['discount'] / 100)
+                total = subtotal + vat - discount
+
+                # תיבת סיכום
+                st.markdown(f"""
+                <div class="summary-box">
+                    <h4>סיכום תשלום:</h4>
+                    <p>סכום ביניים: <b>₪{subtotal:,.2f}</b></p>
+                    <p>מע"מ (17%): <b>₪{vat:,.2f}</b></p>
+                    <p>הנחה ({st.session_state.customer_data['discount']}%): <b>-₪{discount:,.2f}</b></p>
+                    <hr>
+                    <h3>סך הכל לתשלום: <span style="color: #d32f2f;">₪{total:,.2f}</span></h3>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.info("לא נבחרו מוצרים עדיין. הזן כמות ליד המוצרים הרצויים.")
+
+# טאב 3: יצירת הצעה
+with tab3:
+    st.subheader("יצירת הצעת מחיר")
+
+    # בדיקת נתונים
+    if not st.session_state.customer_data['name']:
+        st.warning("יש להזין פרטי לקוח בטאב הראשון")
+    elif isinstance(st.session_state.selected_items, pd.DataFrame) and st.session_state.selected_items.empty:
+        st.warning("יש לבחור מוצרים בטאב השני")
+    else:
+        # אפשרות להוסיף הדמיה
+        st.markdown("### הוסף הדמיה (אופציונלי)")
+        demo_file = st.file_uploader(
+            "גרור תמונת הדמיה לכאן או לחץ לבחירה",
+            type=['png', 'jpg', 'jpeg'],
+            help="התמונה תתווסף כעמוד נפרד ב-PDF"
+        )
+
+        if demo_file:
+            st.session_state.demo_image = demo_file
+            st.success("ההדמיה נוספה בהצלחה!")
+            # הצגת תצוגה מקדימה
+            st.image(demo_file, caption="תצוגה מקדימה של ההדמיה", use_column_width=True)
+
+        # כפתור יצירת PDF
+        if st.button("🎯 צור הצעת מחיר", type="primary", use_container_width=True):
+            with st.spinner("יוצר הצעת מחיר..."):
+                # יצירת PDF
+                pdf_buffer = create_enhanced_pdf(
+                    st.session_state.customer_data,
+                    st.session_state.selected_items,
+                    st.session_state.demo_image
+                )
+
+                # הורדת קובץ
+                st.success("ההצעה נוצרה בהצלחה!")
+                st.download_button(
+                    label="📥 הורד הצעת מחיר",
+                    data=pdf_buffer,
+                    file_name=f"הצעת_מחיר_{st.session_state.customer_data['name']}_{date.today()}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+
+                # אפשרות לאפס
+                if st.button("🔄 התחל הצעה חדשה", use_container_width=True):
+                    for key in st.session_state.keys():
+                        del st.session_state[key]
+                    st.rerun()
+
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style="text-align: center; color: #999;">
+        <p>Panel Kitchens © 2025 | מערכת הצעות מחיר</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
