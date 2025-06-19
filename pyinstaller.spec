@@ -1,19 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+
+hidden_streamlit = collect_submodules("streamlit")
+data_streamlit = collect_data_files("streamlit")
+
 a = Analysis(
     ['run_app.py'],
     pathex=['panel_app'],
     binaries=[],
-    datas=[
+    datas=data_streamlit + [
         ('assets/*', 'assets'),
         ('static/*', 'static'),
         ('*.py', '.'),
         ('utils/*.py', 'utils'),
     ],
-    hiddenimports=[
-        'streamlit',
-        'streamlit.runtime.scriptrunner',
-        'streamlit.web.bootstrap',
+    hiddenimports=hidden_streamlit + [
         'pandas',
         'openpyxl',
         'reportlab',
