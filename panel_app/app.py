@@ -320,7 +320,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             w, h = img.getSize()
             ratio = (5 * mm) / h
             logo_w = w * ratio
-            canv.drawImage(img, x, 3 * mm, height=5 * mm, preserveAspectRatio=True)
+            canv.drawImage(img, x, 3 * mm, height=5 * mm, preserveAspectRatio=True, mask='auto')
             x += logo_w + 5 * mm
         canv.setFont(PDF_FONT, 8)
         canv.setFillColorRGB(0, 0, 0)
@@ -337,7 +337,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             w_img, h_img = img.getSize()
             ratio = logo_w / w_img
             logo_h = h_img * ratio
-            canv.drawImage(img, m, H - m - logo_h, width=logo_w, height=logo_h, preserveAspectRatio=True)
+            canv.drawImage(img, m, H - m - logo_h, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
         canv.setFont(PDF_BOLD, 36)
         canv.setFillColorRGB(0.827, 0.184, 0.184)
         canv.drawCentredString(W / 2, H - m - logo_h - 10 * mm, rtl('הצעת מחיר'))
@@ -367,7 +367,12 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
 
     c.setFont(PDF_FONT, 11)
     c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=1)
+    c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=1, stroke=0)
+    c.setLineWidth(0.5)
+    c.setStrokeColorRGB(0.8, 0.8, 0.8)
+    x_cols = [m, W - m - 120 * mm, W - m - 80 * mm, W - m - 40 * mm, W - m]
+    for x_left, x_right in zip(x_cols, x_cols[1:]):
+        c.rect(x_left, y - ROW_HEIGHT, x_right - x_left, ROW_HEIGHT, fill=0, stroke=1)
     c.setFillColorRGB(1, 1, 1)
     headers = [
         ("מוצר", W - m),
@@ -375,8 +380,9 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         ("מחיר ליחידה", W - m - 80 * mm),
         ("סה\"כ", W - m - 120 * mm),
     ]
+    text_y = y - ROW_HEIGHT / 2 + 2
     for text, pos in headers:
-        draw_rtl(c, pos, y, text, PDF_FONT, fontsize=11)
+        draw_rtl(c, pos, text_y, text, PDF_FONT, fontsize=11)
 
     y -= ROW_HEIGHT
     c.setFont(PDF_FONT, 10)
