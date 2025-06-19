@@ -189,6 +189,7 @@ if 'customer_data' not in st.session_state:
     st.session_state.customer_data = {
         'name': '',
         'phone': '',
+        'email': '',
         'address': '',
         'date': date.today(),
         'discount': 0.0,
@@ -313,88 +314,56 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         canv.rect(0, 0, W, 3 * mm, fill=1, stroke=0)
         x = m
         logo_small = 'logo_small.png'
+        logo_w = 0
         if os.path.exists(logo_small):
-            canv.drawImage(logo_small, x, 3 * mm, height=5 * mm, preserveAspectRatio=True)
-            x += 20 * mm
+            img = ImageReader(logo_small)
+            w, h = img.getSize()
+            ratio = (5 * mm) / h
+            logo_w = w * ratio
+            canv.drawImage(img, x, 3 * mm, height=5 * mm, preserveAspectRatio=True)
+            x += logo_w + 5 * mm
         canv.setFont(PDF_FONT, 8)
         canv.setFillColorRGB(0, 0, 0)
-        canv.drawString(x, 5 * mm, 'Panel Kitchens | www.panel-k.co.il | טל: 072-393-3997')
-        draw_rtl(canv, W - m, 5 * mm, f"עמוד {page} מתוך {total}", PDF_FONT, 8)
-        link_text = rtl("לחזור לדשבורד")
-        link_w = pdfmetrics.stringWidth(link_text, PDF_FONT, 8)
-        canv.drawString(W - m - link_w, 10 * mm, link_text)
-        try:
-            from reportlab.pdfbase.pdfdoc import PDFAnnotation
-            annot = PDFAnnotation(uri="https://dashboard.url", Rect=(W - m - link_w, 10 * mm, W - m, 14 * mm), Subtype='Link')
-            canv._addAnnotation(annot)
-        except Exception:
-            pass
+        canv.drawString(x, 5 * mm, 'Panel Kitchens | www.panel-k.co.il | דוא"ל: M@panel-k.co.il')
+        canv.drawRightString(W - m, 5 * mm, rtl('טלפון: 072-393-3997'))
+        draw_rtl(canv, W - m, 10 * mm, f"עמוד {page} מתוך {total}", PDF_FONT, 8)
 
-    pages_total = 2 + (1 if (demo1 or demo2) else 0)
+    def draw_header(canv):
+        logo_big = 'logo_big.png'
+        logo_w = 35 * mm
+        logo_h = 0
+        if os.path.exists(logo_big):
+            img = ImageReader(logo_big)
+            w_img, h_img = img.getSize()
+            ratio = logo_w / w_img
+            logo_h = h_img * ratio
+            canv.drawImage(img, m, H - m - logo_h, width=logo_w, height=logo_h, preserveAspectRatio=True)
+        canv.setFont(PDF_BOLD, 36)
+        canv.setFillColorRGB(0.827, 0.184, 0.184)
+        canv.drawCentredString(W / 2, H - m - logo_h - 10 * mm, rtl('הצעת מחיר'))
+        return H - m - logo_h - 20 * mm
+
+    pages_total = 2
     page_num = 1
 
-    # עמוד שער
-    cover_bar = 'cover_bar.png'
-    if os.path.exists(cover_bar):
-        c.saveState()
-        try:
-            c.setFillAlpha(0.3)
-        except Exception:
-            pass
-        c.drawImage(cover_bar, 0, H - 30 * mm, width=W, height=30 * mm)
-        c.restoreState()
-
-    big_logo = 'logo_big.png'
-    if os.path.exists(big_logo):
-        c.drawImage(big_logo, (W - 100 * mm) / 2, H - 70 * mm, width=100 * mm, preserveAspectRatio=True)
-
-    c.setFont(PDF_BOLD, 36)
-    c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.drawCentredString(W / 2, H - 90 * mm, rtl('הצעת מחיר'))
-    c.setFillColorRGB(0, 0, 0)
-    draw_rtl(c, W - m, H - 110 * mm, f"לכבוד: {customer_data['name']} | תאריך: {customer_data['date'].strftime('%d/%m/%Y')}", PDF_FONT, fontsize=18)
-    draw_watermark(c)
-    draw_footer(c, page_num, pages_total)
-    c.showPage()
-    page_num += 1
 
     # עמוד נתונים
-    logo_path = None
-    for ext in ['png', 'jpg', 'jpeg']:
-        if os.path.exists(f'logo.{ext}'):
-            logo_path = f'logo.{ext}'
-            break
-        elif os.path.exists(f'Logo.{ext}'):
-            logo_path = f'Logo.{ext}'
-            break
-
-    if logo_path:
-        try:
-            img = PILImage.open(logo_path).convert("RGBA")
-            bg = PILImage.new("RGB", img.size, (255, 255, 255))
-            bg.paste(img, mask=img.split()[3])
-            temp_logo = os.path.join(tempfile.gettempdir(), "logo_flat.jpg")
-            bg.save(temp_logo)
-            logo_flat = ImageReader(temp_logo)
-            c.drawImage(logo_flat, m, H - m - 40 * mm, 40 * mm, preserveAspectRatio=True)
-        except Exception as e:
-            print(f"Error loading logo: {e}")
-
+    y = draw_header(c)
     draw_watermark(c)
-    y = H - 40 * mm
-    c.setFont(PDF_FONT, 24)
-    c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.drawCentredString(W / 2, y, rtl('הצעת מחיר'))
-
-    y -= 20 * mm
     c.setFillColorRGB(0, 0, 0)
-    draw_rtl(c, W - m, y, f"לכבוד: {customer_data['name']}", PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 6 * mm, f"תאריך: {customer_data['date'].strftime('%d/%m/%Y')}", PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 12 * mm, f"טלפון: {customer_data['phone']}", PDF_FONT, fontsize=12)
-    # KeyError: 'email' occurred here when customer_data lacked this field
-    draw_rtl(c, W - m, y - 18 * mm, 'דוא"ל: M@panel-k.co.il', PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 24 * mm, f"כתובת: {customer_data['address']}", PDF_FONT, fontsize=12)
-    y -= 30 * mm
+
+    c.setFillColorRGB(0, 0, 0)
+    customer_details = [
+        ("לכבוד:", customer_data['name']),
+        ("תאריך:", customer_data['date'].strftime('%d/%m/%Y')),
+        ("טלפון:", customer_data['phone']),
+        ("דוא\"ל:", customer_data['email']),
+        ("כתובת:", customer_data['address']),
+    ]
+    for label, value in customer_details:
+        draw_rtl(c, W - m, y, f"{label} {value}", font=PDF_FONT, fontsize=12)
+        y -= 6 * mm
+    y -= 6 * mm
 
     c.setFont(PDF_FONT, 11)
     c.setFillColorRGB(0.827, 0.184, 0.184)
@@ -464,8 +433,8 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     page_num += 1
 
     if demo1 or demo2:
+        y_img = draw_header(c)
         draw_watermark(c)
-        y_img = H - m
         if demo1:
             c.setFont(PDF_FONT, 24)
             c.drawCentredString(W / 2, y_img, rtl("הדמיה"))
@@ -540,6 +509,11 @@ with tab1:
             "טלפון:",
             value=st.session_state.customer_data['phone'],
             placeholder="050-1234567"
+        )
+        st.session_state.customer_data['email'] = st.text_input(
+            "דוא\"ל:",
+            value=st.session_state.customer_data['email'],
+            placeholder="name@example.com"
         )
 
     with col2:
@@ -727,7 +701,7 @@ with tab3:
                 st.download_button(
                     label="📥 הורד הצעת מחיר",
                     data=pdf_buffer,
-                    file_name=f"הצעת_מחיר_{st.session_state.customer_data['name']}_{date.today()}.pdf",
+                    file_name=f"הצעת_מחיר_{st.session_state.customer_data['name']}_{st.session_state.customer_data['email']}_{date.today()}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
