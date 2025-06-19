@@ -25,14 +25,13 @@ def draw_rtl(cnv, x, y, text, fontname='Alef', fontsize=12):
 # כותרת ראשית ב־UI
 st.title("הצעת מחיר")
 
-# איתור רישום פונט עברי ל־PDF
+# איתור וטענת פונט עברי ל־PDF
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# חיפוש קבצי TTF בתיקייה
 ttf_files = [f for f in os.listdir(BASE_DIR) if f.lower().endswith('.ttf')]
 if ttf_files:
-    font_path = os.path.join(BASE_DIR, ttf_files[0])
+    font_file = os.path.join(BASE_DIR, ttf_files[0])
     try:
-        pdfmetrics.registerFont(TTFont('Alef', font_path))
+        pdfmetrics.registerFont(TTFont('Alef', font_file))
         pdf_font = 'Alef'
     except Exception:
         pdf_font = 'Helvetica'
@@ -72,28 +71,29 @@ def load_catalog(uploaded) -> pd.DataFrame:
 uploaded_file = st.file_uploader("העלה קובץ קטלוג (Excel):", type=['xlsx'])
 if uploaded_file:
     catalog = load_catalog(uploaded_file)
-    display_cols = [c for c in ['קטגוריה', 'הערות', 'הפריט', 'מחיר יחידה'] if c in catalog.columns]
+    cols = [c for c in ['קטגוריה','הערות','הפריט','מחיר יחידה'] if c in catalog.columns]
     st.subheader("קטלוג מוצרים")
-    st.dataframe(catalog[display_cols])
+    st.dataframe(catalog[cols])
 
     choice = st.multiselect(
         "בחר מוצרים:",
         options=catalog.index,
         format_func=lambda i: f"{catalog.at[i,'הפריט']} ({catalog.at[i,'קטגוריה']})"
     )
+
     if choice:
-        order = catalog.loc[choice, ['הפריט', 'מחיר יחידה']].copy()
+        order = catalog.loc[choice, ['הפריט','מחיר יחידה']].copy()
         for idx in choice:
             qty = st.number_input(f"כמות עבור {catalog.at[idx,'הפריט']}:", min_value=1, value=1, key=f"qty_{idx}")
-            order.at[idx, 'כמות'] = qty
+            order.at[idx,'כמות'] = qty
         order['סהכ'] = order['מחיר יחידה'] * order['כמות']
 
         st.subheader("פרטי הזמנה")
-        st.dataframe(order[['הפריט', 'כמות', 'מחיר יחידה', 'סהכ']])
+        st.dataframe(order[['הפריט','כמות','מחיר יחידה','סהכ']])
 
         sub = order['סהכ'].sum()
         vat = sub * 0.17
-        disc = (sub + vat) * (discount_pct / 100)
+        disc = (sub + vat) * (discount_pct/100)
         tot = sub + vat - disc
 
         # הצגת סכומים ב־UI
@@ -123,39 +123,38 @@ if uploaded_file:
             y -= 6*mm
             draw_rtl(c, W - m, y, f"כתובת: {address}", fontsize=12)
 
-            # טבלת מוצרים
+            # טבלת מוצרים במבנה RTL
             y -= 20*mm
-            draw_rtl(c, m, y, "מוצר", fontsize=12)
-            draw_rtl(c, m + 80*mm, y, "כמות", fontsize=12)
-            draw_rtl(c, m + 100*mm, y, "מחיר ליחידה", fontsize=12)
             draw_rtl(c, W - m, y, "סהכ", fontsize=12)
+            draw_rtl(c, W - m - 50*mm, y, "מחיר ליחידה", fontsize=12)
+            draw_rtl(c, m + 80*mm, y, "כמות", fontsize=12)
+            draw_rtl(c, m, y, "מוצר", fontsize=12)
             y -= 6*mm
             for rec in order.to_dict(orient='records'):
                 c.drawString(m, y, rec['הפריט'])
-                c.drawRightString(m + 90*mm, y, str(int(rec['כמות'])))
-                c.drawRightString(m + 130*mm, y, f"{rec['מחיר יחידה']:.2f}")
-                draw_rtl(c, W - m, y, f"{rec['סהכ']:.2f}", fontsize=12)
+                c.drawRightString(m + 80*mm, y, str(int(rec['כמות'])))
+                c.drawRightString(W - m - 50*mm, y, f"{rec['מחיר יחידה']:.2f}")
+                c.drawRightString(W - m, y, f"{rec['סהכ']:.2f}")
                 y -= 6*mm
 
-            # סיכומים
+            # סיכומים במבנה RTL: תווית ואז ערך
             y -= 10*mm
-            draw_rtl(c, W - m, y, f"{sub:.2f}")
-            draw_rtl(c, m + 130*mm, y, "סכום ביניים")
+            draw_rtl(c, m + 20*mm, y, "סכום ביניים", fontsize=12)
+            c.drawRightString(W - m, y, f"{sub:.2f}")
             y -= 6*mm
-            draw_rtl(c, W - m, y, f"{vat:.2f}")
-            draw_rtl(c, m + 130*mm, y, "מע\"מ (17%)")
+            draw_rtl(c, m + 20*mm, y, "מע\"מ (17%)", fontsize=12)
+            c.drawRightString(W - m, y, f"{vat:.2f}")
             y -= 6*mm
-            draw_rtl(c, W - m, y, f"-{disc:.2f}")
-            draw_rtl(c, m + 130*mm, y, f"הנחה ({discount_pct}%)")
+            draw_rtl(c, m + 20*mm, y, f"הנחה ({discount_pct}%)", fontsize=12)
+            c.drawRightString(W - m, y, f"-{disc:.2f}")
             y -= 6*mm
-            draw_rtl(c, W - m, y, f"{tot:.2f}")
-            draw_rtl(c, m + 130*mm, y, "סך הכל לתשלום")
+            draw_rtl(c, m + 20*mm, y, "סך הכל לתשלום", fontsize=12)
+            c.drawRightString(W - m, y, f"{tot:.2f}")
 
-            # Footer
-            y -= 15*mm
+            # Footer ושיפור מיקום החתימה
+            y = m + 30*mm
             validity = (offer_date + pd.Timedelta(days=30)).strftime('%Y-%m-%d')
-            draw_rtl(c, W - m, y, f"הצעה תקפה עד ל-{validity}", fontsize=10)
-            y -= 10*mm
+            draw_rtl(c, W - m, y + 10*mm, f"הצעה תקפה עד ל-{validity}", fontsize=10)
             draw_rtl(c, m, y, "חתימת הלקוח: ____________________________", fontsize=12)
 
             c.showPage()
