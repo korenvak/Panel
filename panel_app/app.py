@@ -7,6 +7,14 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader
 from PIL import Image as PILImage
+from reportlab.lib.units import mm
+# RTL support
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+except Exception:
+    arabic_reshaper = None
+    get_display = None
 import tempfile
 import os
 import io
@@ -128,6 +136,19 @@ def reverse_hebrew(text):
             return text[::-1]
     return text
 
+# פונקציה לתמיכה ב-RTL מלא
+def rtl(text):
+    """Reshape and bidi text for proper RTL display"""
+    if not isinstance(text, str):
+        text = str(text)
+    if arabic_reshaper and get_display:
+        try:
+            reshaped = arabic_reshaper.reshape(text)
+            return get_display(reshaped)
+        except Exception:
+            pass
+    return text[::-1]
+
 
 # Header עם לוגו
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -176,8 +197,10 @@ if 'customer_data' not in st.session_state:
 if 'selected_items' not in st.session_state:
     st.session_state.selected_items = pd.DataFrame()
 
-if 'demo_image' not in st.session_state:
-    st.session_state.demo_image = None
+if 'demo1' not in st.session_state:
+    st.session_state.demo1 = None
+if 'demo2' not in st.session_state:
+    st.session_state.demo2 = None
 
 
 # פונקציה לטעינת קטלוג
@@ -236,34 +259,28 @@ def load_catalog(file):
 
 
 # יצירת PDF משופר
-def create_enhanced_pdf(customer_data, items_df, demo_image=None):
+def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     """יצירת PDF עם עיצוב משופר"""
     buffer = io.BytesIO()
 
-    # יצירת Canvas
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # נסיון לטעון פונט עברי
     try:
-        # נסיון ראשון - קובץ פונט מקומי
         font_path = os.path.join(os.path.dirname(__file__), 'Alef-Regular.ttf')
         if os.path.exists(font_path):
             pdfmetrics.registerFont(TTFont('Hebrew', font_path))
             hebrew_font = 'Hebrew'
         else:
-            # נסיון שני - פונט Arial של Windows
             try:
                 pdfmetrics.registerFont(TTFont('Hebrew', 'C:/Windows/Fonts/Arial.ttf'))
                 hebrew_font = 'Hebrew'
-            except:
+            except Exception:
                 hebrew_font = 'Helvetica'
-    except:
+    except Exception:
         hebrew_font = 'Helvetica'
 
     # עמוד ראשון - הצעת מחיר
-
-    # הוספת לוגו
     logo_path = None
     for ext in ['png', 'jpg', 'jpeg']:
         if os.path.exists(f'logo.{ext}'):
@@ -275,88 +292,61 @@ def create_enhanced_pdf(customer_data, items_df, demo_image=None):
 
     if logo_path:
         try:
-            # הוספת לוגו בפינה הימנית העליונה
             logo = ImageReader(logo_path)
             c.drawImage(logo, width - 150, height - 100, width=100, height=50, preserveAspectRatio=True)
         except Exception as e:
             print(f"Error loading logo: {e}")
 
-    # כותרת
     y = height - 80
     c.setFont(hebrew_font, 24)
-    c.setFillColorRGB(0.827, 0.184, 0.184)  # צבע אדום
-    title_text = reverse_hebrew("הצעת מחיר")
-    c.drawCentredString(width / 2, y, title_text)
+    c.setFillColorRGB(0.827, 0.184, 0.184)
+    c.drawCentredString(width / 2, y, rtl("הצעת מחיר"))
 
-    # פרטי לקוח
     y -= 60
     c.setFont(hebrew_font, 12)
     c.setFillColorRGB(0, 0, 0)
-
-    customer_details = [
-        (reverse_hebrew("לכבוד:"), reverse_hebrew(customer_data['name'])),
-        (reverse_hebrew("תאריך:"), customer_data['date'].strftime('%d/%m/%Y')),
-        (reverse_hebrew("טלפון:"), customer_data['phone']),
-        (reverse_hebrew("כתובת:"), reverse_hebrew(customer_data['address']))
+    details = [
+        (rtl("לכבוד:"), rtl(customer_data.get('name', ''))),
+        (rtl("תאריך:"), customer_data['date'].strftime('%d/%m/%Y')),
+        (rtl("טלפון:"), customer_data.get('phone', '')),
+        (rtl("כתובת:"), rtl(customer_data.get('address', '')))
     ]
-
-    for label, value in customer_details:
+    for label, value in details:
         c.drawRightString(width - 50, y, f"{label} {value}")
         y -= 20
 
-    # טבלת מוצרים
     y -= 30
-
-    # כותרות טבלה
     c.setFont(hebrew_font, 11)
-    c.setFillColorRGB(1, 1, 1)  # לבן
-
-    # רקע אדום לכותרות
     c.setFillColorRGB(0.827, 0.184, 0.184)
     c.rect(50, y - 15, width - 100, 25, fill=1)
-
-    # טקסט כותרות
     c.setFillColorRGB(1, 1, 1)
     headers = [
-        (reverse_hebrew("מוצר"), 450),
-        (reverse_hebrew("הערות"), 350),
-        (reverse_hebrew("כמות"), 250),
-        (reverse_hebrew("מחיר יחידה"), 150),
-        (reverse_hebrew("סהכ"), 70)
+        (rtl("מוצר"), 450),
+        (rtl("כמות"), 250),
+        (rtl("מחיר ליחידה"), 150),
+        (rtl('סה"כ'), 70)
     ]
-
-    for header, x_pos in headers:
-        c.drawRightString(x_pos, y, header)
+    for text, pos in headers:
+        c.drawRightString(pos, y, text)
 
     y -= 30
-
-    # שורות הטבלה
     c.setFont(hebrew_font, 10)
     c.setFillColorRGB(0, 0, 0)
-
     for idx, row in items_df.iterrows():
-        # רקע אפור לשורות זוגיות
         if idx % 2 == 0:
             c.setFillColorRGB(0.95, 0.95, 0.95)
             c.rect(50, y - 15, width - 100, 20, fill=1)
             c.setFillColorRGB(0, 0, 0)
-
-        # נתוני שורה
-        c.drawRightString(450, y, reverse_hebrew(str(row['הפריט'])))
-        c.drawRightString(350, y, reverse_hebrew(str(row['הערות'])))
+        c.drawRightString(450, y, rtl(str(row['הפריט'])))
         c.drawRightString(250, y, str(int(row['כמות'])))
         c.drawRightString(150, y, f"₪{row['מחיר יחידה']:,.0f}")
         c.drawRightString(70, y, f"₪{row['סהכ']:,.0f}")
-
         y -= 25
-
-        # בדיקה אם צריך עמוד חדש
-        if y < 100:
+        if y < 150:
             c.showPage()
             y = height - 50
             c.setFont(hebrew_font, 10)
 
-    # סיכומים
     y -= 20
     c.setLineWidth(2)
     c.setStrokeColorRGB(0.827, 0.184, 0.184)
@@ -364,78 +354,66 @@ def create_enhanced_pdf(customer_data, items_df, demo_image=None):
 
     y -= 30
     c.setFont(hebrew_font, 12)
-
-    # חישובים
     subtotal = items_df['סהכ'].sum()
-    vat = subtotal * 0.17
-    discount_amount = (subtotal + vat) * (customer_data['discount'] / 100)
-    total = subtotal + vat - discount_amount
+    contractor_discount = float(customer_data.get('contractor_discount', 0))
+    sub_after = subtotal - contractor_discount
+    vat = sub_after * 0.17
+    discount_amount = (sub_after + vat) * (customer_data['discount'] / 100)
+    total = sub_after + vat - discount_amount
 
-    # הצגת סיכומים
-    summary_items = [
-        (reverse_hebrew("סכום ביניים"), f"₪{subtotal:,.2f}"),
-        (reverse_hebrew("מע\"מ (17%)"), f"₪{vat:,.2f}"),
-        (reverse_hebrew(f"הנחה ({customer_data['discount']}%)"), f"-₪{discount_amount:,.2f}"),
-    ]
-
-    for label, value in summary_items:
+    summary = [(rtl("סכום ביניים"), f"₪{subtotal:,.2f}")]
+    if contractor_discount:
+        summary.append((rtl("הנחת קבלן"), f"-₪{contractor_discount:,.2f}"))
+    summary.extend([
+        (rtl('מע"מ (17%)'), f"₪{vat:,.2f}"),
+        (rtl(f"הנחה ({customer_data['discount']}%)"), f"-₪{discount_amount:,.2f}")
+    ])
+    for label, value in summary:
         c.drawRightString(200, y, label)
         c.drawRightString(70, y, value)
         y -= 25
 
-    # סך הכל - מודגש
     y -= 10
     c.setFont(hebrew_font, 14)
     c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.drawRightString(200, y, reverse_hebrew("סך הכל לתשלום"))
+    c.drawRightString(200, y, rtl("סך הכל לתשלום"))
     c.drawRightString(70, y, f"₪{total:,.2f}")
 
-    # תוקף וחתימה
-    y = 100
-    c.setFont(hebrew_font, 10)
-    c.setFillColorRGB(0, 0, 0)
-    validity = (customer_data['date'] + timedelta(days=30)).strftime('%d/%m/%Y')
-    c.drawRightString(width - 50, y, reverse_hebrew(f"הצעה זו תקפה עד לתאריך: {validity}"))
+    y -= 40
+    c.setFont(hebrew_font, 9)
+    conditions = [
+        rtl("הצעת המחיר תקפה ל-14 ימים ממועד הפקתה."),
+        rtl("ההצעה מיועדת ללקוח הספציפי בלבד ולא להעברה לחוץ."),
+        rtl("המחירים עשויים להשתנות והחברה אינה אחראית לטעויות."),
+        rtl("אישור ההצעה מהווה התחייבות לתשלום 10% מקדמה."),
+        rtl("הלקוח מתחייב לפנות נקודות מים וחשמל בהתאם לתכניות."),
+        rtl("אי עמידה בתנאים עלולה לגרור עיכובים וחריגות.")
+    ]
+    for line in conditions:
+        c.drawRightString(width - 50, y, line)
+        y -= 12
+    y -= 20
+    c.drawRightString(width - 50, y, rtl("חתימת הלקוח: _______________________"))
 
-    y -= 30
-    c.drawRightString(width - 50, y, reverse_hebrew("חתימת הלקוח: _______________________________"))
-
-    # שמירת העמוד הראשון
     c.showPage()
 
-    # עמוד הדמיה אם קיים
-    if demo_image:
-        # כותרת
-        y = height - 50
-        c.setFont(hebrew_font, 24)
-        c.setFillColorRGB(0.827, 0.184, 0.184)
-        c.drawCentredString(width / 2, y, reverse_hebrew("הדמיה"))
+    for demo in [demo1, demo2]:
+        if demo:
+            img = ImageReader(demo)
+            c.setFont(hebrew_font, 24)
+            c.setFillColorRGB(0.827, 0.184, 0.184)
+            c.drawCentredString(width / 2, height - 50, rtl("הדמיה"))
+            w, h = img.getSize()
+            max_w = width - 40 * mm
+            max_h = height - 40 * mm
+            ratio = min(max_w / w, max_h / h)
+            nw = w * ratio
+            nh = h * ratio
+            x = (width - nw) / 2
+            y_img = (height - nh) / 2
+            c.drawImage(img, x, y_img, width=nw, height=nh)
+            c.showPage()
 
-        # הוספת תמונה
-        try:
-            img = ImageReader(demo_image)
-
-            # חישוב גודל תמונה
-            img_width, img_height = img.getSize()
-            max_width = width - 100
-            max_height = height - 200
-
-            # התאמת גודל
-            ratio = min(max_width / img_width, max_height / img_height)
-            new_width = img_width * ratio
-            new_height = img_height * ratio
-
-            # מיקום מרכזי
-            x = (width - new_width) / 2
-            y = (height - new_height) / 2
-
-            c.drawImage(img, x, y, width=new_width, height=new_height)
-        except Exception as e:
-            c.drawString(100, height - 100, f"Error loading image: {str(e)}")
-
-        c.showPage()
-
-    # שמירה וסיום
     c.save()
     buffer.seek(0)
     return buffer
@@ -600,7 +578,7 @@ with tab3:
         )
 
         if demo_file:
-            st.session_state.demo_image = demo_file
+            st.session_state.demo1 = demo_file
             st.success("ההדמיה נוספה בהצלחה!")
             # הצגת תצוגה מקדימה
             st.image(demo_file, caption="תצוגה מקדימה של ההדמיה", use_column_width=True)
@@ -612,7 +590,8 @@ with tab3:
                 pdf_buffer = create_enhanced_pdf(
                     st.session_state.customer_data,
                     st.session_state.selected_items,
-                    st.session_state.demo_image
+                    st.session_state.demo1,
+                    st.session_state.demo2
                 )
 
                 # הורדת קובץ
