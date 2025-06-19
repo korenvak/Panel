@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: 'Droid Hebrew', sans-serif; margin: 40px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .logo { max-height: 80px; }
+        .title h1 { margin: 0; font-size: 24px; }
+        .details p { margin: 4px 0; font-size: 14px; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .table th, .table td { border: 1px solid #333; padding: 8px; text-align: center; font-size: 14px; }
+        .table th { background-color: #f2f2f2; }
+        tfoot td { font-weight: bold; }
+        .footer { margin-top: 40px; font-size: 14px; }
+        .footer p { margin: 6px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">
+            <h1>הצעת מחיר עבור {{ customer.name }}</h1>
+        </div>
+        <img src="{{ logo_path }}" class="logo" alt="Logo">
+    </div>
+    <div class="details">
+        <p>תאריך: {{ customer.date }}</p>
+        <p>טלפון: {{ customer.phone }}</p>
+        <p>כתובת: {{ customer.address }}</p>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>מוצר</th>
+                <th>כמות</th>
+                <th>מחיר ליחידה (₪)</th>
+                <th>סה"כ (₪)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item['הפריט'] }}</td>
+                <td>{{ item['כמות'] }}</td>
+                <td>{{ "{:.2f}".format(item['מחיר יחידה']) }}</td>
+                <td>{{ "{:.2f}".format(item['סה"כ']) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3">סכום ביניים</td>
+                <td>{{ "{:.2f}".format(subtotal) }}</td>
+            </tr>
+            <tr>
+                <td colspan="3">מע"מ (17%)</td>
+                <td>{{ "{:.2f}".format(vat) }}</td>
+            </tr>
+            <tr>
+                <td colspan="3">הנחה ({{ customer.discount_pct }}%)</td>
+                <td>-{{ "{:.2f}".format(discount_amount) }}</td>
+            </tr>
+            <tr>
+                <td colspan="3">סך הכל לתשלום</td>
+                <td>{{ "{:.2f}".format(total) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+    <div class="footer">
+        <p>הצעת המחיר תקפה עד ל-{{ valid_until }}</p>
+        <p>חתימת הלקוח: ____________________________</p>
+    </div>
+</body>
+</html>
