@@ -1,9 +1,9 @@
 import os
 import sys
-import subprocess
 import webbrowser
 import socket
 from threading import Timer
+from streamlit.web import cli as stcli
 
 def find_free_port():
     """Find an available port."""
@@ -19,14 +19,22 @@ def open_browser(port):
 def main():
     port = find_free_port()
     Timer(3, open_browser, args=[port]).start()
-    subprocess.run([
-        sys.executable, '-m', 'streamlit', 'run',
-        'app.py',
-        '--server.port', str(port),
-        '--server.address', 'localhost',
-        '--browser.gatherUsageStats', 'false',
-        '--server.headless', 'true'
-    ])
+    sys.argv = [
+        "streamlit",
+        "run",
+        os.path.join(os.path.dirname(__file__), "app.py"),
+        "--server.port",
+        str(port),
+        "--server.address",
+        "localhost",
+        "--browser.gatherUsageStats",
+        "false",
+        "--server.headless",
+        "true",
+        "--server.runOnSave",
+        "false",
+    ]
+    stcli.main()
 
 if __name__ == '__main__':
     main()
