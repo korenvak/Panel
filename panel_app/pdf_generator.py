@@ -77,7 +77,7 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         canv.setFont(PDF_FONT, 8)
         canv.setFillColorRGB(0, 0, 0)
         info = "הנגרים 1 (מתחם הורדוס), באר שבע | טל: 072-393-3997 | דוא\"ל: info@panel-k.co.il"
-        c.drawString(m, 12 * mm, rtl(info))
+        c.drawString(x, 5 * mm, rtl(info))
 
         # מספור עמודים מימין
         page_text = rtl(f"עמוד {page} מתוך {total}")
