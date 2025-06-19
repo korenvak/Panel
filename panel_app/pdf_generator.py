@@ -59,23 +59,30 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             canv.restoreState()
 
     def draw_footer(canv, page, total):
+        # פס אדום בתחתית
         canv.setFillColorRGB(0.827, 0.184, 0.184)
         canv.rect(0, 0, W, 3 * mm, fill=1, stroke=0)
+
+        # לוגו קטן משמאל
         x = m
-        logo_small = asset_path('logo.png')
-        logo_w = 0
+        logo_small = asset_path('logo_small.png')
         if os.path.exists(logo_small):
             img = ImageReader(logo_small)
             w, h = img.getSize()
-            ratio = (5 * mm) / h
-            logo_w = w * ratio
-            canv.drawImage(img, x, 3 * mm, height=5 * mm, preserveAspectRatio=True, mask='auto')
-            x += logo_w + 5 * mm
+            scale = (5 * mm) / h
+            canv.drawImage(img, x, 3 * mm, height=5 * mm, width=w * scale, preserveAspectRatio=True, mask='auto')
+            x += w * scale + 5 * mm
+
+        # פרטי חברה משמאל לצד הלוגו
         canv.setFont(PDF_FONT, 8)
         canv.setFillColorRGB(0, 0, 0)
-        canv.drawString(x, 5 * mm, 'Panel Kitchens | www.panel-k.co.il | דוא"ל: M@panel-k.co.il')
-        canv.drawRightString(W - m, 5 * mm, rtl('טלפון: 072-393-3997'))
-        draw_rtl(canv, W - m, 10 * mm, f"עמוד {page} מתוך {total}", PDF_FONT, 8)
+        info = "הנגרים 1 (מתחם הורדוס), באר שבע | טל: 072-393-3997 | דוא\"ל: info@panel-k.co.il"
+        c.drawString(m, 12 * mm, rtl(info))
+
+        # מספור עמודים מימין
+        page_text = rtl(f"עמוד {page} מתוך {total}")
+        canv.setFont(PDF_FONT, 8)
+        canv.drawRightString(W - m, 5 * mm, page_text)
 
     def draw_header(canv):
         logo_big = asset_path('logo.png')
@@ -140,10 +147,13 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=1, stroke=0)
         c.setFillColorRGB(0, 0, 0)
         text_y = y - ROW_HEIGHT / 2 - 1 * mm
-        draw_rtl(c, W - m, text_y, rec['הפריט'], PDF_FONT, 10)
-        c.drawRightString(W - m - 40 * mm, text_y, str(int(rec['כמות'])))
-        c.drawRightString(W - m - 80 * mm, text_y, f"₪{rec['מחיר יחידה']:.2f}")
-        c.drawRightString(W - m - 120 * mm, text_y, f"₪{rec['סהכ']:.2f}")
+        font_size = 10
+        y_text = y - ROW_HEIGHT / 2 + font_size / 2
+        draw_rtl(c, W - m, y_text, rec['הפריט'], PDF_FONT, font_size)
+        c.drawRightString(W - m - 40 * mm, y_text, str(int(rec['כמות'])))
+        c.drawRightString(W - m - 80 * mm, y_text, f"₪{rec['מחיר יחידה']:.2f}")
+        c.drawRightString(W - m - 120 * mm, y_text, f"₪{rec['סהכ']:.2f}")
+
         c.setLineWidth(0.5)
         c.setStrokeColorRGB(0.8, 0.8, 0.8)
         for x_left, x_right in zip(x_cols, x_cols[1:]):
@@ -233,10 +243,9 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         if y < 30 * mm:
             y = 30 * mm
         draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________", PDF_FONT, 12)
-        c.setFont(PDF_FONT, 10)
-        c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
-        c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
-        c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
+        c.setFont(PDF_FONT, 8)
+        #company_info = "הנגרים 1 (מתחם הורדוס), באר שבע | טל: 072-393-3997 | דוא\"ל: info@panel-k.co.il"
+        #c.drawString(m, 12 * mm, rtl(company_info))
         draw_footer(c, page_num, pages_total)
         c.showPage()
         page_num += 1
@@ -258,9 +267,9 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             y = 30 * mm
         draw_rtl(c, W - m, y, "חתימת הלקוח: ____________________", PDF_FONT, 12)
         c.setFont(PDF_FONT, 10)
-        c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
-        c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
-        c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
+        #c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
+        #c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
+        #c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
         draw_footer(c, page_num, pages_total)
         c.showPage()
         page_num += 1
