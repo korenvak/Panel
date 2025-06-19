@@ -268,28 +268,97 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     c = canvas.Canvas(buffer, pagesize=A4)
     W, H = A4
     m = 20 * mm
+    ROW_HEIGHT = 6 * mm
 
+    # רישום גופנים
     try:
-        font_path = os.path.join(os.path.dirname(__file__), 'Alef-Regular.ttf')
+        reg_path = os.path.join(os.path.dirname(__file__), 'Heebo-Regular.ttf')
+        bold_path = os.path.join(os.path.dirname(__file__), 'Heebo-Bold.ttf')
+        pdfmetrics.registerFont(TTFont('Heebo', reg_path))
+        pdfmetrics.registerFont(TTFont('Heebo-Bold', bold_path))
+        PDF_FONT = 'Heebo'
+        PDF_BOLD = 'Heebo-Bold'
+    except Exception:
+        font_path = os.path.join(os.path.dirname(__file__), 'Alef Regular.ttf')
         if os.path.exists(font_path):
             pdfmetrics.registerFont(TTFont('Hebrew', font_path))
-            hebrew_font = 'Hebrew'
+            PDF_FONT = 'Hebrew'
+            PDF_BOLD = 'Hebrew'
         else:
-            try:
-                pdfmetrics.registerFont(TTFont('Hebrew', 'C:/Windows/Fonts/Arial.ttf'))
-                hebrew_font = 'Hebrew'
-            except Exception:
-                hebrew_font = 'Helvetica'
-    except Exception:
-        hebrew_font = 'Helvetica'
+            PDF_FONT = PDF_BOLD = 'Helvetica'
 
-    PDF_FONT = hebrew_font
-
-    def draw_rtl(canv, x, y, text, font, fontsize=12):
+    def draw_rtl(canv, x, y, text, font=PDF_FONT, fontsize=12):
         canv.setFont(font, fontsize)
         canv.drawRightString(x, y, rtl(text))
 
-    # עמוד ראשון - הצעת מחיר
+    def draw_watermark(canv):
+        wm_path = 'watermark.png'
+        if os.path.exists(wm_path):
+            canv.saveState()
+            try:
+                canv.setFillAlpha(0.1)
+            except Exception:
+                pass
+            img = ImageReader(wm_path)
+            w_img, h_img = img.getSize()
+            scale = min((W / 2) / w_img, (H / 2) / h_img)
+            nw, nh = w_img * scale, h_img * scale
+            canv.translate(W / 2, H / 2)
+            canv.rotate(45)
+            canv.drawImage(img, -nw / 2, -nh / 2, width=nw, height=nh)
+            canv.restoreState()
+
+    def draw_footer(canv, page, total):
+        canv.setFillColorRGB(0.827, 0.184, 0.184)
+        canv.rect(0, 0, W, 3 * mm, fill=1, stroke=0)
+        x = m
+        logo_small = 'logo_small.png'
+        if os.path.exists(logo_small):
+            canv.drawImage(logo_small, x, 3 * mm, height=5 * mm, preserveAspectRatio=True)
+            x += 20 * mm
+        canv.setFont(PDF_FONT, 8)
+        canv.setFillColorRGB(0, 0, 0)
+        canv.drawString(x, 5 * mm, 'Panel Kitchens | www.panel-k.co.il | טל: 072-393-3997')
+        draw_rtl(canv, W - m, 5 * mm, f"עמוד {page} מתוך {total}", PDF_FONT, 8)
+        link_text = rtl("לחזור לדשבורד")
+        link_w = pdfmetrics.stringWidth(link_text, PDF_FONT, 8)
+        canv.drawString(W - m - link_w, 10 * mm, link_text)
+        try:
+            from reportlab.pdfbase.pdfdoc import PDFAnnotation
+            annot = PDFAnnotation(uri="https://dashboard.url", Rect=(W - m - link_w, 10 * mm, W - m, 14 * mm), Subtype='Link')
+            canv._addAnnotation(annot)
+        except Exception:
+            pass
+
+    pages_total = 2 + (1 if (demo1 or demo2) else 0)
+    page_num = 1
+
+    # עמוד שער
+    cover_bar = 'cover_bar.png'
+    if os.path.exists(cover_bar):
+        c.saveState()
+        try:
+            c.setFillAlpha(0.3)
+        except Exception:
+            pass
+        c.drawImage(cover_bar, 0, H - 30 * mm, width=W, height=30 * mm)
+        c.restoreState()
+
+    big_logo = 'logo_big.png'
+    if os.path.exists(big_logo):
+        c.drawImage(big_logo, (W - 100 * mm) / 2, H - 70 * mm, width=100 * mm, preserveAspectRatio=True)
+
+    c.setFont(PDF_BOLD, 36)
+    c.setFillColorRGB(0.827, 0.184, 0.184)
+    c.drawCentredString(W / 2, H - 90 * mm, rtl('הצעת מחיר'))
+    c.setFillColorRGB(0, 0, 0)
+    draw_rtl(c, W - m, H - 110 * mm, f"לכבוד: {customer_data['name']} | תאריך: {customer_data['date'].strftime('%d/%m/%Y')}", PDF_FONT, fontsize=18)
+    draw_watermark(c)
+    draw_footer(c, page_num, pages_total)
+    c.showPage()
+    page_num += 1
+
+    # עמוד נתונים
     logo_path = None
     for ext in ['png', 'jpg', 'jpeg']:
         if os.path.exists(f'logo.{ext}'):
@@ -311,22 +380,24 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
         except Exception as e:
             print(f"Error loading logo: {e}")
 
+    draw_watermark(c)
     y = H - 40 * mm
     c.setFont(PDF_FONT, 24)
     c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.drawCentredString(W / 2, y, rtl("הצעת מחיר"))
+    c.drawCentredString(W / 2, y, rtl('הצעת מחיר'))
 
     y -= 20 * mm
+    c.setFillColorRGB(0, 0, 0)
     draw_rtl(c, W - m, y, f"לכבוד: {customer_data['name']}", PDF_FONT, fontsize=12)
     draw_rtl(c, W - m, y - 6 * mm, f"תאריך: {customer_data['date'].strftime('%d/%m/%Y')}", PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 12 * mm, "טלפון: 072-393-3997", PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 18 * mm, "דוא\"ל: M@panel-k.co.il", PDF_FONT, fontsize=12)
-    draw_rtl(c, W - m, y - 24 * mm, "כתובת: באר שבע (מתחם הורדוס)", PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 12 * mm, f"טלפון: {customer_data['phone']}", PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 18 * mm, f'דוא"ל: {customer_data["email"]}', PDF_FONT, fontsize=12)
+    draw_rtl(c, W - m, y - 24 * mm, f"כתובת: {customer_data['address']}", PDF_FONT, fontsize=12)
     y -= 30 * mm
 
     c.setFont(PDF_FONT, 11)
     c.setFillColorRGB(0.827, 0.184, 0.184)
-    c.rect(m, y - 6 * mm, W - 2 * m, 6 * mm, fill=1)
+    c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=1)
     c.setFillColorRGB(1, 1, 1)
     headers = [
         ("מוצר", W - m),
@@ -337,21 +408,24 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     for text, pos in headers:
         draw_rtl(c, pos, y, text, PDF_FONT, fontsize=11)
 
-    y -= 6 * mm
+    y -= ROW_HEIGHT
     c.setFont(PDF_FONT, 10)
     c.setFillColorRGB(0, 0, 0)
     for i, rec in enumerate(items_df.to_dict(orient='records')):
         if i % 2 == 0:
             c.setFillColorRGB(0.95, 0.95, 0.95)
-            c.rect(m, y - 3 * mm, W - 2 * m, 6 * mm, fill=1, stroke=0)
+            c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=1, stroke=0)
         c.setFillColorRGB(0, 0, 0)
         draw_rtl(c, W - m, y, rec['הפריט'], PDF_FONT, 10)
         c.drawRightString(W - m - 40 * mm, y, str(int(rec['כמות'])))
         c.drawRightString(W - m - 80 * mm, y, f"₪{rec['מחיר יחידה']:.2f}")
         c.drawRightString(W - m - 120 * mm, y, f"₪{rec['סהכ']:.2f}")
-        y -= 6 * mm
+        c.setLineWidth(0.5)
+        c.setStrokeColorRGB(0.8, 0.8, 0.8)
+        c.rect(m, y - ROW_HEIGHT, W - 2 * m, ROW_HEIGHT, fill=0, stroke=1)
+        y -= ROW_HEIGHT
 
-    y -= 20
+    y -= 20 * mm
     c.setLineWidth(2)
     c.setStrokeColorRGB(0.827, 0.184, 0.184)
     c.line(m, y, W - m, y)
@@ -384,9 +458,12 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     c.drawRightString(W - m - 60 * mm, y, f"₪{total:,.2f}")
     c.setFillColorRGB(0, 0, 0)
 
+    draw_footer(c, page_num, pages_total)
     c.showPage()
+    page_num += 1
 
     if demo1 or demo2:
+        draw_watermark(c)
         y_img = H - m
         if demo1:
             c.setFont(PDF_FONT, 24)
@@ -413,7 +490,6 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
             nw2, nh2 = w2 * r2, h2 * r2
             x2 = (W - nw2) / 2
             c.drawImage(img2, x2, y_img - nh2, width=nw2, height=nh2)
-        c.showPage()
 
     y = H - 30 * mm
     c.setFont(PDF_FONT, 8)
@@ -436,6 +512,9 @@ def create_enhanced_pdf(customer_data, items_df, demo1=None, demo2=None):
     c.drawString(m, 20 * mm, rtl("הנגרים 1 (מתחם הורדוס), באר שבע"))
     c.drawString(m, 15 * mm, rtl("טל: 072-393-3997"))
     c.drawString(m, 10 * mm, rtl("דוא\"ל: M@panel-k.co.il"))
+    draw_footer(c, page_num, pages_total)
+    c.showPage()
+    page_num += 1
 
     c.save()
     buffer.seek(0)
