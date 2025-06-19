@@ -10,10 +10,10 @@ a = Analysis(
     pathex=['panel_app'],
     binaries=[],
     datas=data_streamlit + [
-        ('assets/*', 'assets'),
-        ('static/*', 'static'),
-        ('*.py', '.'),
-        ('utils/*.py', 'utils'),
+        ('panel_app/assets/*', 'assets'),
+        ('panel_app/static/*', 'static'),
+        ('panel_app/*.py', '.'),
+        ('panel_app/utils/*.py', 'utils'),
     ],
     hiddenimports=hidden_streamlit + [
         'pandas',
@@ -51,5 +51,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/White_Logo.ico'
+    icon='panel_app/assets/White_Logo.ico'
 )
