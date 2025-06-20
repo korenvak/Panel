@@ -6,8 +6,11 @@ import sys
 def get_base_path() -> str:
     """Return base path, compatible with PyInstaller executables."""
     if getattr(sys, "frozen", False):
-        return sys._MEIPASS  # type: ignore[attr-defined]
-    return os.path.dirname(os.path.dirname(__file__))
+        # Running in PyInstaller bundle
+        return sys._MEIPASS
+    else:
+        # Running in normal Python environment
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 BASE_DIR = get_base_path()
@@ -16,4 +19,8 @@ ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 
 def asset_path(filename: str) -> str:
     """Return absolute path for file inside the assets directory."""
-    return os.path.join(ASSETS_DIR, filename)
+    path = os.path.join(ASSETS_DIR, filename)
+    # Debug print for troubleshooting
+    if not os.path.exists(path):
+        print(f"Warning: Asset not found at {path}")
+    return path
